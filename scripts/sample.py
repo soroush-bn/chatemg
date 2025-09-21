@@ -5,7 +5,7 @@ import argparse
 import os
 import pickle
 from contextlib import nullcontext
-from setuptools.distutils.util import strtobool
+from setuptools._distutils.util import strtobool
 
 
 import numpy as np
