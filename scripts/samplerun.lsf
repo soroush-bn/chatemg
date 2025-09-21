@@ -1,8 +1,4 @@
 #!/bin/bash
-#BSUB -J run-sample
-#BSUB -gpu "num=1"               
-#BSUB -o ./outs/%J.out
-#BSUB -e ./errors/%J.err
 
 set -euo pipefail
 
