@@ -12,6 +12,7 @@ module load miniconda/3
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
-
+python -m pip install --user tiktoken
+python -m pip install --user seaborn
 
 python sample.py --ckpt_path "../data/interchannel_relax_jordan_2024-06-01_12-47-28/iter_002500_train_0.9423125_val_1.1834919/"
