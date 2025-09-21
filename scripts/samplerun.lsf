@@ -8,7 +8,7 @@
 set -euo pipefail
 
 module purge
-module load miniconda/3
+module load miniconda/pytorch-tensorflow-gpu-2024.09
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
