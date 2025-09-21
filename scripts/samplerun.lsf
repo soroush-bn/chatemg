@@ -2,8 +2,8 @@
 #BSUB -J run-sample
 #BSUB -q gpu                 
 #BSUB -W 2:00                
-#BSUB -o %J.out
-#BSUB -e %J.err
+#BSUB -o ./outs/%J.out
+#BSUB -e ./errors/%J.err
 
 set -euo pipefail
 
