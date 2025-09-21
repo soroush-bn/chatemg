@@ -1,0 +1,22 @@
+#!/bin/bash
+#BSUB -J run-sample
+#BSUB -q gpu                 
+#BSUB -W 2:00                
+#BSUB -o %J.out
+#BSUB -e %J.err
+
+set -euo pipefail
+
+module purge
+module load miniconda/3
+
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate buildrust
+
+echo "=== Python ==="
+which python
+python -c "import sys; print('Python:', sys.version); print('Exec:', sys.executable)"
+echo "=== GPUs ==="
+command -v nvidia-smi >/dev/null && nvidia-smi || echo "nvidia-smi not found"
+
+python sample.py --ckpt_path "../data/interchannel_relax_jordan_2024-06-01_12-47-28/iter_002500_train_0.9423125_val_1.1834919/"
