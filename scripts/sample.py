@@ -5,7 +5,8 @@ import argparse
 import os
 import pickle
 from contextlib import nullcontext
-from distutils.util import strtobool
+from setuptools.distutils.util import strtobool
+
 
 import numpy as np
 import tiktoken
