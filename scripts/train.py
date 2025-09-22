@@ -71,7 +71,7 @@ backend = "nccl"  # 'nccl', 'gloo', etc.
 device = (
     "cuda"  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 )
-dtype = "bfloat16"  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+dtype = "float16"  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True  # use PyTorch 2.0 to compile the model to be faster
 # preprocessing
 median_filter_size = 9  # 1 means no median filter
@@ -109,7 +109,7 @@ device_type = "cuda" if "cuda" in device else "cpu"  # for later use in torch.au
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {
     "float32": torch.float32,
-    "bfloat16": torch.bfloat16,
+    "bfloat16": torch.float16,
     "float16": torch.float16,
 }[dtype]
 ctx = (
