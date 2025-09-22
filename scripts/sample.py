@@ -67,7 +67,7 @@ if __name__ == "__main__":
     )
     seed = args.seed
     device = "cuda"  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
-    dtype = "bfloat16"  # 'float32' or 'bfloat16' or 'float16'
+    dtype = "float16"  # 'float32' or 'bfloat16' or 'float16'
     compile = True  # use PyTorch 2.0 to compile the model to be faster
     # -----------------------------------------------------------------------------
 
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     )  # for later use in torch.autocast
     ptdtype = {
         "float32": torch.float32,
-        "bfloat16": torch.bfloat16,
+        "bfloat16": torch.float16,
         "float16": torch.float16,
     }[dtype]
     ctx = (
