@@ -9,7 +9,8 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
 python -m pip install --user tiktoken
 python -m pip install --user seaborn
-
+python -m pip install --upgrade pip wheel
+python -m pip install --user "triton"
 
 
 
@@ -24,39 +25,6 @@ echo
 echo "=== GPU details ==="
 nvidia-smi --query-gpu=index,name,compute_cap,driver_version,memory.total \
            --format=csv,noheader
-
-echo
-echo "=== CUDA runtime reported by driver ==="
-nvidia-smi | sed -n 's/.*CUDA Version: \([0-9.]\+\).*/CUDA (driver) runtime: \1/p'
-
-echo
-echo "=== CUDA toolkit (nvcc) on PATH ==="
-if command -v nvcc >/dev/null; then
-  nvcc --version | sed -n 's/.*release \([0-9.]\+\).*/CUDA toolkit: \1/p'
-else
-  echo "nvcc not found"
-fi
-
-echo
-echo "=== PyTorch view (if installed) ==="
-if command -v python >/dev/null; then
-python - <<'PY'
-import sys
-print("Python:", sys.version.split()[0])
-try:
-    import torch
-    print("Torch:", torch.__version__)
-    print("Torch compiled CUDA:", getattr(torch.version, "cuda", None))
-    print("CUDA available:", torch.cuda.is_available())
-    print("CUDA devices:", torch.cuda.device_count())
-    if torch.cuda.is_available():
-        print("Device 0:", torch.cuda.get_device_name(0))
-except Exception as e:
-    print("Torch not importable or errored:", e)
-PY
-else
-  echo "python not found"
-fi
 
 
 python train.py config/sample_config.py
