@@ -24,7 +24,7 @@ from torch.utils.data import DataLoader, random_split
 
 from chatemg_dataset import ChatEMGDataset
 from model import GPTConfig, GPT_interchannel
-
+print("LIBS LOADED")
 # -----------------------------------------------------------------------------
 # default config values designed to train a ChatEMG model on relax class of the give data file
 # I/O
@@ -78,7 +78,7 @@ median_filter_size = 9  # 1 means no median filter
 
 train_csv_files = []
 test_csv_files = []
-
+print("PARAMS SET")
 
 # -----------------------------------------------------------------------------
 config_keys = [
