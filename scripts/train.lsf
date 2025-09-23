@@ -25,5 +25,5 @@ nvidia-smi --query-gpu=index,name,compute_cap,driver_version,memory.total \
            --format=csv,noheader
 
 
-+ export PYTHONUNBUFFERED=1
-+ python -u train.py config/sample_config.py
+export PYTHONUNBUFFERED=1
+python -u train.py config/sample_config.py
