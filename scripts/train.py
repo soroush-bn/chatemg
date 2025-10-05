@@ -121,7 +121,7 @@ ctx = (
 )
 
 sample_data_files = [
-    "../data/p7_131.csv",
+    "../data/converted_final_df.csv",
 ]
 
 split_seed = 42

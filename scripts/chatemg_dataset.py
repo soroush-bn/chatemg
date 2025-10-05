@@ -127,12 +127,9 @@ class ChatEMGDataset(Dataset):
 if __name__ == "__main__":
     dataset = ChatEMGDataset(
         csv_files=[
-            "2023_02_17_p1/p1_111.csv",
-            "2023_02_17_p1/p1_121.csv",
-            "2023_02_17_p1/p1_131.csv",
-            "2023_02_17_p1/p1_141.csv",
+"../data/converted_final_df.csv"
         ],
-        filter_class=1,
+        filter_class=15,
         block_size=256,
         shift=True,
         flip=True,
@@ -141,5 +138,5 @@ if __name__ == "__main__":
     x, y = dataset[0]
     print(f"x shape: {x.shape}, y shape: {y.shape}")
     print("here")
-    print(dataset.table[:10])
+    print(dataset)
     print(len(dataset.filtered_data_list))
