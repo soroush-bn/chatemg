@@ -112,7 +112,7 @@ if __name__ == "__main__":
     from chatemg_dataset import ChatEMGDataset
 
     test_dataset = ChatEMGDataset(
-        csv_files=["../data/p7_131.csv"],
+        csv_files=["../data/converted_final_df.csv"],
         filter_class=filter_class,
         block_size=args.token_len,
         median_filter_size=args.median_filter_size
