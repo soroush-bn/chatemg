@@ -161,6 +161,6 @@ if __name__ == "__main__":
         nrows=nrows,
         ncols=ncols,
         vertical_location=None,
-        save_fnm="real_vs_synthetic.png",
+        save_fnm="real_vs_synthetic_15.png",
     )
     print("done")
