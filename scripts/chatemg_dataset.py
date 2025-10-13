@@ -137,6 +137,8 @@ if __name__ == "__main__":
     print(f"num samples: {len(dataset)}")
     x, y = dataset[0]
     print(f"x shape: {x.shape}, y shape: {y.shape}")
+
     print("here")
     print(dataset)
     print(len(dataset.filtered_data_list))
+    print(dataset.sample(10))

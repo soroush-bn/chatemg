@@ -112,10 +112,22 @@ def get_batch(
 
 
 def clean_dataframe(df):
-    X_df = keep_columns(df, [f"emg"])
-    X = X_df.to_numpy()
+    print(df.describe())
+    X_df = keep_columns(df, ["emg"]).copy()
+
+    for col in X_df.columns:
+        col_min = X_df[col].min()
+        col_max = X_df[col].max()
+        if col_max != col_min:
+            X_df[col] = (X_df[col] - col_min) * 999 / (col_max - col_min)
+        else:
+            X_df[col] = 0  
+
+    X = X_df.to_numpy().astype('int64')
+
     y_df = keep_columns(df, ["gt"])
     y = y_df.to_numpy().squeeze()
+    y
     return X, y
 
 
