@@ -111,9 +111,9 @@ def get_batch(
     return x, y
 
 
-def clean_dataframe(df):
+def clean_dataframe(df,sensor_type):
     print(df.describe())
-    X_df = keep_columns(df, ["emg"]).copy()
+    X_df = keep_columns(df, [sensor_type]).copy()
 
     for col in X_df.columns:
         col_min = X_df[col].min()

@@ -20,13 +20,16 @@ class ChatEMGDataset(Dataset):
         median_filter_size=1,
         shift=False,
         flip=False,
+        sensor_type="emg",
+        axis=["x"],
     ):
         self.csv_files = csv_files
         self.filter_class = filter_class
         self.block_size = block_size
         self.shift = shift
         self.flip = flip
-
+        self.sensor_type = sensor_type
+        self.axis = axis
         data_list = []
         label_list = []
         print(type(median_filter_size))
@@ -37,7 +40,7 @@ class ChatEMGDataset(Dataset):
         for f in self.csv_files:
             data_path = f
             df = pd.read_csv(data_path, index_col=0)
-            X, y = mu.clean_dataframe(df)
+            X, y = mu.clean_dataframe(df,sensor_type)
             X = np.clip(X, a_min=clip_min, a_max=clip_max)
             if median_filter_size != 1:
                 X = medfilt(X, kernel_size=[median_filter_size, 1])
@@ -127,12 +130,14 @@ class ChatEMGDataset(Dataset):
 if __name__ == "__main__":
     dataset = ChatEMGDataset(
         csv_files=[
-"../data/converted_final_df.csv"
+"../data/converted_accel_x.csv"
         ],
         filter_class=15,
         block_size=256,
         shift=True,
         flip=True,
+        sensor_type="accel",
+        axis=["x"],
     )
     print(f"num samples: {len(dataset)}")
     x, y = dataset[0]
