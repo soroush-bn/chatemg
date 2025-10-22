@@ -59,4 +59,4 @@ else
 fi
 
 
-python sample.py --ckpt_path "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/sample_train_gpu-a9-n001_2025-10-13_15-03-30/iter_30000_train_0.0041952_val_0.0043790"
+python sample.py --ckpt_path "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/sample_train_gpu-a9-n001_2025-10-22_13-31-37/iter_30000_train_0.0093271_val_0.0098421"

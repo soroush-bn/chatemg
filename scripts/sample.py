@@ -111,8 +111,16 @@ if __name__ == "__main__":
 
     from chatemg_dataset import ChatEMGDataset
 
+    participants_list_ids = ["033106b27b","bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d","ecfa481b42","e49db6578f","27f6898a3f","3f858df9cf","9780ed81f4"] #"bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d"]
+    converted_data_path = "../data/"
+    sensor_types = "accel"
+    axis = "x" 
+    csv_name = f"converted_{sensor_types}_{axis}.csv"
+    #todo make decison on this 
+    data_file_full_path = os.path.join(converted_data_path, participants_list_ids[0], csv_name)
+
     test_dataset = ChatEMGDataset(
-        csv_files=["../data/converted_final_df.csv"],
+        csv_files=[data_file_full_path],
         filter_class=filter_class,
         block_size=args.token_len,
         median_filter_size=args.median_filter_size
@@ -161,6 +169,6 @@ if __name__ == "__main__":
         nrows=nrows,
         ncols=ncols,
         vertical_location=None,
-        save_fnm="real_vs_synthetic_15.png",
+        save_fnm="real_vs_synthetic_15_imu.png",
     )
     print("done")
