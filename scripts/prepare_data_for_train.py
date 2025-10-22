@@ -19,16 +19,17 @@ if __name__ == "__main__":
             os.makedirs(participant_folder, exist_ok=True)
         print(f"Processing participant: {participant_id}")
         csv_path1 = os.path.join(os.path.join(data_path, participant_id),csv_name)
-
+        print(f"Reading data from: {csv_path1}")
         df1 = pd.read_csv(csv_path1)
         df1 = convert_raw_values(df1, normalize=False)
-        
+        print(f"Converted raw values for participant: {participant_id}.")
         if sensor_types == ["emg"]:
             emg_df = get_emg_df(df1,saving_dir=participant_folder)
         else:
             for sensor_type in sensor_types:
                 for ax in axis:
                     imu_df = get_IMU_df(df1, sensor_type, ax,saving_dir=participant_folder)
+                    print(f"Converted {sensor_type} data along {ax}-axis for participant: {participant_id}.")
         print(f"Conversion completed for participant: {participant_id}.")
 
 
