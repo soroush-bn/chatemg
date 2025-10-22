@@ -5,8 +5,8 @@ import numpy as np
 
 participants_list_ids = ["033106b27b","bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d","ecfa481b42","e49db6578f","27f6898a3f","3f858df9cf","9780ed81f4"] #"bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d"]
 data_path = "/home/sbaghernezha/data/"
-csv_name = "finl_df.csv"
-csv_name_down= "finl_df_payin.csv"
+csv_name = "final_df.csv"
+csv_name_down= "final_df_payin.csv"
 sensor_types = ["accel"] 
 axis = ["x"]  
 saving_dir =  "../data/"
