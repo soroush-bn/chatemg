@@ -1,7 +1,7 @@
 import pandas as pd
 import datetime
 import numpy as np
-
+import os 
 saving_dir = "./"   
 label_mapping = {
         "Thumb Extension":0,"index Extension":1,"Middle Extension":2,"Ring Extension":3,
@@ -68,8 +68,8 @@ def get_emg_df(df,saving_dir=saving_dir): #final df
 
     print("Data types of columns:")
     print(new_df.dtypes)
-
-    new_df.to_csv('converted_emg.csv', index=True)
+    save_name = os.path.join(saving_dir,'converted_emg.csv')
+    new_df.to_csv(save_name, index=True)
     return new_df
 
 
@@ -108,8 +108,8 @@ def get_IMU_df(df, type, axis,saving_dir=saving_dir):
 
     print("Data types of columns:")
     print(new_df.dtypes)
-
-    new_df.to_csv(f'converted_{type}_{axis}.csv', index=True)
+    save_name = os.path.join(saving_dir,f'converted_{type}_{axis}.csv')
+    new_df.to_csv(save_name, index=True)
     return new_df
 
 if __name__ == "__main__":
