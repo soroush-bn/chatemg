@@ -2,7 +2,7 @@ import pandas as pd
 import datetime
 import numpy as np
 
-        
+saving_dir = "./"   
 label_mapping = {
         "Thumb Extension":0,"index Extension":1,"Middle Extension":2,"Ring Extension":3,
                 "Pinky Extension":4,"Thumbs Up":5,"Right Angle":6,"Peace":7,"OK":8,"Horn":9,"Hang Loose":10,
@@ -34,7 +34,7 @@ def convert_raw_values(df, normalize=True):
     return df 
 
 
-def get_emg_df(df): #final df
+def get_emg_df(df,saving_dir=saving_dir): #final df
     
     new_df = pd.DataFrame()
 
@@ -73,7 +73,7 @@ def get_emg_df(df): #final df
     return new_df
 
 
-def get_IMU_df(df, type, axis):
+def get_IMU_df(df, type, axis,saving_dir=saving_dir):
     """Create a wide-form dataframe for IMU readings similar to get_emg_df.
 
     The output has columns: gt, current_time, current_task, sensor1_{type}_{axis}, ..., sensor8_{type}_{axis}.
