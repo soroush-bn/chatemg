@@ -4,15 +4,18 @@ References:
 https://github.com/karpathy/nanoGPT
 """
 
+import glob
 import math
 import os
 import pathlib
+import pickle
+import re
 import socket
+
+# os.environ['TORCH_USE_CUDA_DSA'] = '1'  # for debugging purpose
 import time
 from contextlib import nullcontext
 
-import hydra
-from omegaconf import DictConfig, OmegaConf
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -22,67 +25,80 @@ from torch.utils.data import DataLoader, random_split
 from chatemg_dataset import ChatEMGDataset
 from model import GPTConfig, GPT_interchannel
 print("LIBS LOADED")
+# -----------------------------------------------------------------------------
+# default config values designed to train a ChatEMG model on relax class of the give data file
+# I/O
+exp_name = "exp"
+filter_class = 0  # [relax, open, close]
+eval_interval = 2500
+log_interval = 10
+eval_iters = 200
+eval_only = False  # if True, script exits right after the first eval
+always_save_checkpoint = True  # if True, always save a checkpoint after each eval
+init_from = "scratch"  # 'scratch'
+# wandb logging
+wandb_log = False  # disabled by default
+# wandb_project = "project_name"
+# data
+gradient_accumulation_steps = 1  # used to simulate larger batch sizes
+batch_size = 64  # if gradient_accumulation_steps > 1, this is the micro-batch size
+block_size = 256
+split = 0.8  # train/val split
+ckpt_path = None
+# model
+model_type = "GPT_interchannel"
+token_embedding_type = "basic_sum"
+n_layer = 12
+n_head = 8
+n_embd = 256
+dropout = 0.2
+bias = False  # do we use bias inside LayerNorm and Linear layers?
+# adamw optimizer
+learning_rate = 1e-3  # max learning rate
+max_iters = 100000
+weight_decay = 1e-1
+beta1 = 0.9
+beta2 = 0.99  # make a bit bigger because number of tokens per iter is small
+grad_clip = 1.0  # clip gradients at this value, or disable if == 0.0
+# learning rate decay settings
+decay_lr = True  # whether to decay the learning rate
+warmup_iters = 2000  # how many steps to warm up for
+lr_decay_iters = 100000  # should be ~= max_iters per Chinchilla
+min_lr = 1e-4  # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+# DDP settings
+backend = "nccl"  # 'nccl', 'gloo', etc.
+# system
+device = (
+    "cuda"  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+)
+dtype = "float16"  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+compile = True  # use PyTorch 2.0 to compile the model to be faster
+# preprocessing
+median_filter_size = 9  # 1 means no median filter
+
+train_csv_files = []
+test_csv_files = []
+print("PARAMS SET")
+
+# -----------------------------------------------------------------------------
+config_keys = [
+    k
+    for k, v in globals().items()
+    if not k.startswith("_") and isinstance(v, (int, float, bool, str, list))
+]
+print("1")
+exec(open("configurator.py").read())  # overrides from command line or config file
+config = {k: globals()[k] for k in config_keys}  # will be useful for logging
+print("2")
 
 # -----------------------------------------------------------------------------
 
-@hydra.main(version_base=None, config_path=".", config_name="config")
-def main(cfg: DictConfig):
-    # Convert config to dict for easier access
-    config = OmegaConf.to_container(cfg, resolve=True)
-    
-    # Extract config values
-    exp_name = cfg.exp_name
-    filter_class = cfg.filter_class
-    eval_interval = cfg.eval_interval
-    log_interval = cfg.log_interval
-    eval_iters = cfg.eval_iters
-    eval_only = cfg.eval_only
-    always_save_checkpoint = cfg.always_save_checkpoint
-    init_from = cfg.init_from
-    wandb_log = cfg.wandb_log
-    wandb_project = cfg.get('wandb_project', 'chatemg')
-    gradient_accumulation_steps = cfg.gradient_accumulation_steps
-    batch_size = cfg.batch_size
-    block_size = cfg.block_size
-    split = cfg.split
-    ckpt_path = cfg.ckpt_path
-    model_type = cfg.model_type
-    token_embedding_type = cfg.token_embedding_type
-    n_layer = cfg.n_layer
-    n_head = cfg.n_head
-    n_embd = cfg.n_embd
-    dropout = cfg.dropout
-    bias = cfg.bias
-    learning_rate = cfg.learning_rate
-    max_iters = cfg.max_iters
-    weight_decay = cfg.weight_decay
-    beta1 = cfg.beta1
-    beta2 = cfg.beta2
-    grad_clip = cfg.grad_clip
-    decay_lr = cfg.decay_lr
-    warmup_iters = cfg.warmup_iters
-    lr_decay_iters = cfg.lr_decay_iters
-    min_lr = cfg.min_lr
-    backend = cfg.backend
-    device = cfg.device
-    dtype = cfg.dtype
-    compile_model = cfg.compile
-    median_filter_size = cfg.median_filter_size
-    train_csv_files = cfg.train_csv_files
-    test_csv_files = cfg.test_csv_files
-    sample_data_files = cfg.sample_data_files
-    split_seed = cfg.split_seed
-    vocab_size = cfg.vocab_size
-
-    print("Configuration loaded:")
-    print(OmegaConf.to_yaml(cfg))
-    
-    model_files_base_directory = os.path.join(
-        pathlib.Path(__file__).resolve().parent.__str__(), "models"
-    )
-    timestr = time.strftime("%Y-%m-%d_%H-%M-%S")
-    exp_name = f"{exp_name}_{socket.gethostname()}_{timestr}"
-    save_dir = os.path.join(model_files_base_directory, exp_name)
+model_files_base_directory = os.path.join(
+    pathlib.Path(__file__).resolve().parent.__str__(), "models"
+)
+timestr = time.strftime("%Y-%m-%d_%H-%M-%S")
+exp_name = f"{exp_name}_{socket.gethostname()}_{timestr}"
+save_dir = os.path.join(model_files_base_directory, exp_name)
 
 tokens_per_iter = gradient_accumulation_steps * batch_size * block_size
 print(f"tokens per iteration will be: {tokens_per_iter:,}")
@@ -97,11 +113,12 @@ device_type = "cuda" if "cuda" in device else "cpu"  # for later use in torch.au
 
 
 participants_list_ids = ["033106b27b","bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d","ecfa481b42","e49db6578f","27f6898a3f","3f858df9cf","9780ed81f4"] #"bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d"]
-data_path = "/home/sbaghernezha/data/033106b27b/"
-csv_name = "finl_df.csv"
-sensor_types = [ "accel"]
-axis = ["x"]  
-
+data_path = "/home/sbaghernezha/data/"
+sensor_types = "accel"
+axis = "x" 
+csv_name = f"converted_{sensor_types}_{axis}.csv"
+#todo make decison on this 
+data_file_full_path = os.path.join(data_path, participants_list_ids[0], csv_name)
 ptdtype = {
     "float32": torch.float32,
     "bfloat16": torch.float16,
@@ -113,9 +130,8 @@ ctx = (
     else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 )
 # should be the converted one 
-sample_data = data_path+ csv_name
 sample_data_files = [
-    sample_data,
+    data_file_full_path,
 ]
 
 split_seed = 42

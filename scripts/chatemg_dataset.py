@@ -20,8 +20,8 @@ class ChatEMGDataset(Dataset):
         median_filter_size=1,
         shift=False,
         flip=False,
-        sensor_type="emg",
-        axis=["x"],
+        sensor_type="accel",
+        axis="x",
     ):
         self.csv_files = csv_files
         self.filter_class = filter_class
