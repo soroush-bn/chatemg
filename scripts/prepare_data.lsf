@@ -3,7 +3,7 @@
 #BSUB -n 4
 #BSUB -o ./outs/%J.out
 #BSUB -e ./errors/%J.err
-#BSUB -q normal
+#BSUB -q large_memory
 
 set -euo pipefail
 
