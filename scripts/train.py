@@ -237,24 +237,24 @@ if block_size < model.config.block_size:
     ] = block_size  # so that the checkpoint will have the right value
 model.to(device)
 
-# wrap model into DDP container
-if ddp:
-    model = DDP(model, device_ids=[ddp_local_rank])
-
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
 
-# optimizer
+# optimizer - create BEFORE wrapping with DDP
 optimizer = model.configure_optimizers(
     weight_decay, learning_rate, (beta1, beta2), device_type
 )
 checkpoint = None  # free up memory
 
-# compile the model
+# compile the model - do this BEFORE wrapping with DDP
 if compile:
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
     model = torch.compile(model, backend="eager")  # requires PyTorch 2.0
+
+# wrap model into DDP container - do this LAST
+if ddp:
+    model = DDP(model, device_ids=[ddp_local_rank])
 
 # wrap model to access raw model (unwrap DDP/compile if needed)
 raw_model = model.module if ddp else model
