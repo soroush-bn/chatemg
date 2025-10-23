@@ -78,6 +78,10 @@ def get_IMU_df(df, type, axis,saving_dir=saving_dir):
 
     The output has columns: gt, current_time, current_task, sensor1_{type}_{axis}, ..., sensor8_{type}_{axis}.
     """
+    # Downsample by taking every 10th row
+    df = df.iloc[::10].copy()
+    print(f"Downsampled IMU data: {len(df)} samples (1 in every 10 rows)")
+    
     new_df = pd.DataFrame()
 
     # Copy sensor data (sensor1 to sensor8), fill NaN with 0 and convert to float64
