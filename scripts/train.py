@@ -21,6 +21,9 @@ import torch
 import torch.nn.functional as F
 import yaml
 from torch.utils.data import DataLoader, random_split
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data.distributed import DistributedSampler
+import torch.distributed as dist
 
 from chatemg_dataset import ChatEMGDataset
 from model import GPTConfig, GPT_interchannel
@@ -92,6 +95,26 @@ config = {k: globals()[k] for k in config_keys}  # will be useful for logging
 print("2")
 
 # -----------------------------------------------------------------------------
+# DDP initialization
+ddp = int(os.environ.get('RANK', -1)) != -1  # is this a ddp run?
+if ddp:
+    dist.init_process_group(backend=backend)
+    ddp_rank = int(os.environ['RANK'])
+    ddp_local_rank = int(os.environ['LOCAL_RANK'])
+    ddp_world_size = int(os.environ['WORLD_SIZE'])
+    device = f'cuda:{ddp_local_rank}'
+    torch.cuda.set_device(device)
+    master_process = ddp_rank == 0  # this process will do logging, checkpointing etc.
+    seed_offset = ddp_rank  # each process gets a different seed
+    # world_size number of processes will be training simultaneously, so we can scale
+    # down the desired gradient accumulation iterations per process proportionally
+    assert gradient_accumulation_steps % ddp_world_size == 0
+    gradient_accumulation_steps //= ddp_world_size
+else:
+    # if not ddp, we are running on a single gpu, and one process
+    master_process = True
+    seed_offset = 0
+    ddp_world_size = 1
 
 model_files_base_directory = os.path.join(
     pathlib.Path(__file__).resolve().parent.__str__(), "models"
@@ -100,11 +123,13 @@ timestr = time.strftime("%Y-%m-%d_%H-%M-%S")
 exp_name = f"{exp_name}_{socket.gethostname()}_{timestr}"
 save_dir = os.path.join(model_files_base_directory, exp_name)
 
-tokens_per_iter = gradient_accumulation_steps * batch_size * block_size
+tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
 print(f"tokens per iteration will be: {tokens_per_iter:,}")
+if master_process:
+    os.makedirs(save_dir, exist_ok=True)
 
-np.random.seed(1337)  # dataset is using numpy
-torch.manual_seed(1337)
+np.random.seed(1337 + seed_offset)  # dataset is using numpy
+torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 device_type = "cuda" if "cuda" in device else "cpu"  # for later use in torch.autocast
@@ -152,11 +177,20 @@ train_dataset, test_dataset = random_split(
     dataset, [split, 1 - split], generator=torch.Generator().manual_seed(split_seed)
 )
 
-train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
-print(
-    f"number of training samples: {len(train_dataset)}, number of test samples: {len(test_dataset)}"
-)
+# Create samplers for DDP
+if ddp:
+    train_sampler = DistributedSampler(train_dataset, num_replicas=ddp_world_size, rank=ddp_rank, shuffle=True, seed=split_seed)
+    test_sampler = DistributedSampler(test_dataset, num_replicas=ddp_world_size, rank=ddp_rank, shuffle=False, seed=split_seed)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler)
+else:
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+
+if master_process:
+    print(
+        f"number of training samples: {len(train_dataset)}, number of test samples: {len(test_dataset)}"
+    )
 
 
 def get_batch(split):
@@ -198,6 +232,10 @@ if block_size < model.config.block_size:
     ] = block_size  # so that the checkpoint will have the right value
 model.to(device)
 
+# wrap model into DDP container
+if ddp:
+    model = DDP(model, device_ids=[ddp_local_rank])
+
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
 
@@ -211,7 +249,10 @@ checkpoint = None  # free up memory
 if compile:
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
-    model = torch.compile(model,backend="eager")  # requires PyTorch 2.0
+    model = torch.compile(model, backend="eager")  # requires PyTorch 2.0
+
+# wrap model to access raw model (unwrap DDP/compile if needed)
+raw_model = model.module if ddp else model
 
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
@@ -259,7 +300,7 @@ def get_lr(it):
 
 
 # logging
-if wandb_log:
+if wandb_log and master_process:
     import wandb
 
     wandb.init(project=wandb_project, name=exp_name, config=config)
@@ -268,7 +309,8 @@ if wandb_log:
 X, Y = get_batch("train")  # fetch the very first batch
 X, Y = X.to(device), Y.to(device)
 t0 = time.time()
-raw_model = model  # unwrap DDP container if needed
+local_iter_num = 0  # number of iterations in the lifetime of this process
+running_mfu = -1.0
 while True:
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
@@ -276,7 +318,7 @@ while True:
         param_group["lr"] = lr
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0:
+    if iter_num % eval_interval == 0 and master_process:
         losses, mse_losses, perplexity = estimate_loss()
         print(
             f"step {iter_num}: train loss {losses['train']:.7f}, val loss {losses['val']:.7f}"
@@ -357,13 +399,17 @@ while True:
     t1 = time.time()
     dt = t1 - t0
     t0 = t1
-    if iter_num % log_interval == 0:
+    if iter_num % log_interval == 0 and master_process:
         # get loss as float. note: this is a CPU-GPU sync point
         # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
         lossf = loss.item() * gradient_accumulation_steps
         print(f"iter {iter_num}: loss {lossf:.7f}, time {dt * 1000:.2f}ms")
     iter_num += 1
+    local_iter_num += 1
 
     # termination conditions
     if iter_num > max_iters:
         break
+
+if ddp:
+    dist.destroy_process_group()
