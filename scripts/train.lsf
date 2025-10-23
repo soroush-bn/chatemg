@@ -32,6 +32,20 @@ python prepare_data_for_train.py
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 echo "Number of GPUs detected: $NUM_GPUS"
 
+# Start background GPU monitoring
+echo "Starting GPU monitoring (logging to gpu_usage_log.csv)..."
+(
+    while true; do
+        nvidia-smi --query-gpu=index,timestamp,utilization.gpu,utilization.memory,memory.used,memory.total,temperature.gpu,power.draw \
+                   --format=csv >> gpu_usage_log.csv
+        sleep 10  # Log every 10 seconds
+    done
+) &
+GPU_MONITOR_PID=$!
+
+# Trap to ensure GPU monitoring stops when script exits
+trap "kill $GPU_MONITOR_PID 2>/dev/null" EXIT
+
 # Launch distributed training with torchrun if multiple GPUs, otherwise single GPU
 if [ "$NUM_GPUS" -gt 1 ]; then
     echo "Launching distributed training on $NUM_GPUS GPUs"
@@ -40,3 +54,7 @@ else
     echo "Launching single GPU training"
     python -u train.py config/sample_config.py
 fi
+
+# Stop GPU monitoring
+kill $GPU_MONITOR_PID 2>/dev/null
+echo "GPU usage log saved to gpu_usage_log.csv"
