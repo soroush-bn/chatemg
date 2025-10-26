@@ -144,11 +144,11 @@ device_type = "cuda" if "cuda" in device else "cpu"  # for later use in torch.au
 
 participants_list_ids = ["033106b27b","bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d","ecfa481b42","e49db6578f","27f6898a3f","3f858df9cf","9780ed81f4"] #"bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d"]
 converted_data_path = "../data/"
-sensor_types = "accel"
+sensor_type = "accel"
 axis = "x" 
-csv_name = f"converted_{sensor_types}_{axis}.csv"
+csv_name = f"converted_{sensor_type}_{axis}.csv"
 #todo make decison on this 
-data_file_full_path = os.path.join(converted_data_path, participants_list_ids[0], csv_name)
+data_file_full_path = os.path.join(converted_data_path, f"merged_{sensor_type}.csv")
 ptdtype = {
     "float32": torch.float32,
     "bfloat16": torch.float16,

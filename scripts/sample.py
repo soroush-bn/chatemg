@@ -117,7 +117,7 @@ if __name__ == "__main__":
     axis = "x" 
     csv_name = f"converted_{sensor_types}_{axis}.csv"
     #todo make decison on this 
-    data_file_full_path = os.path.join(converted_data_path, participants_list_ids[0], csv_name)
+    data_file_full_path = os.path.join(converted_data_path, f"merged_{sensor_types}.csv")
 
     test_dataset = ChatEMGDataset(
         csv_files=[data_file_full_path],

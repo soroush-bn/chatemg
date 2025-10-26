@@ -25,5 +25,5 @@ beta2 = 0.99  # make a bit bigger because number of tokens per iter is small
 warmup_iters = 25  # Reduced by 4x for 4-GPU training (was 100)
 participants_list_ids = ["033106b27b","bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d","ecfa481b42","e49db6578f","27f6898a3f","3f858df9cf","9780ed81f4"] #"bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d"]
 data_path = "/home/sbaghernezha/data/"
-sensor_types =  "accel"
+sensor_type =  "accel"
 axis = "x"

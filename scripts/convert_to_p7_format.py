@@ -80,7 +80,6 @@ def get_IMU_df(df, type, axis,saving_dir=saving_dir):
     """
     # Downsample by taking every 10th row
     df = df.iloc[::10].copy()
-    print(f"Downsampled IMU data: {len(df)} samples (1 in every 10 rows)")
     
     new_df = pd.DataFrame()
 
