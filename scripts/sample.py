@@ -113,7 +113,7 @@ if __name__ == "__main__":
 
     participants_list_ids = ["033106b27b","bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d","ecfa481b42","e49db6578f","27f6898a3f","3f858df9cf","9780ed81f4"] #"bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d"]
     converted_data_path = "../data/"
-    sensor_types = "accel"
+    sensor_types = "emg"
     axis = "x" 
     csv_name = f"converted_{sensor_types}_{axis}.csv"
     #todo make decison on this 

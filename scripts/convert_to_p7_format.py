@@ -45,7 +45,8 @@ def get_emg_df(df,saving_dir=saving_dir): #final df
     # Print any columns with NaN values to debug
     print("\nColumns with NaN values:")
     print(df.isna().sum())
-
+    #remove the rows where label == 'rest'
+    df = df[df['label'] != 'rest']
     # Set labels as 'gt' with numeric mapping
     new_df['gt'] = df['label'].fillna('None').map(label_mapping).fillna(0).astype('int64')
 
@@ -93,6 +94,7 @@ def get_IMU_df(df, type, axis,saving_dir=saving_dir):
     # Print any columns with NaN values to debug
     print("\nColumns with NaN values:")
     print(df.isna().sum())
+    df = df[df['label'] != 'rest']
 
     # Set labels as 'gt' with numeric mapping
     new_df['gt'] = df['label'].fillna('None').map(label_mapping).fillna(0).astype('int64')

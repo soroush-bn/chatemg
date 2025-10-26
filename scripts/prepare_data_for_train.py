@@ -10,7 +10,7 @@ csv_name_down= "final_df_payin.csv"
 sensor_type = "emg"
 axis = ["x"]  
 saving_dir =  "../data/"
-
+saving_csv_name = f"converted_{sensor_type}_{axis[0]}.csv" if sensor_type != "emg" else "converted_emg.csv"
 
 def merge_subjects(type="emg"):
     dfs = []
@@ -18,15 +18,13 @@ def merge_subjects(type="emg"):
         subject_folder = os.path.join(saving_dir, subject)
         merged_df = pd.DataFrame()
         if type == "emg":
-            csv_file = 'converted_emg.csv'
-            csv_path = os.path.join(subject_folder, csv_file)
+            csv_path = os.path.join(subject_folder, saving_csv_name)
             if os.path.exists(csv_path):
                 df = pd.read_csv(csv_path)
                 merged_df = pd.concat([merged_df, df], axis=1)
         else:
             for ax in axis:
-                csv_file = f'converted_{sensor_type}_{ax}.csv'
-                csv_path = os.path.join(subject_folder, csv_file)
+                csv_path = os.path.join(subject_folder, f"converted_{sensor_type}_{ax}.csv")
                 if os.path.exists(csv_path):
                     df = pd.read_csv(csv_path)
                     merged_df = pd.concat([merged_df, df], axis=1)
@@ -44,7 +42,7 @@ if __name__ == "__main__":
     for participant_id in participants_list_ids:
         participant_folder = os.path.join(saving_dir, participant_id)
         #check if already converted file exists 
-        if os.path.exists(os.path.join(participant_folder, csv_name)):
+        if os.path.exists(os.path.join(participant_folder, saving_csv_name)):
             print(f"Converted file already exists for participant: {participant_id}. Skipping conversion.")
             continue
         if os.path.exists(participant_folder):
