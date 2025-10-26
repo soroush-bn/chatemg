@@ -7,7 +7,7 @@ participants_list_ids = ["033106b27b","bc4dd952fe","31afab1e30","97c6aaac2d","70
 data_path = "/home/sbaghernezha/data/"
 csv_name = "final_df.csv"
 csv_name_down= "final_df_payin.csv"
-sensor_type = "accel"
+sensor_type = "emg"
 axis = ["x"]  
 saving_dir =  "../data/"
 
