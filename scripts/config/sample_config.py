@@ -8,7 +8,7 @@ wandb_log = False  # override via command line if you like
 wandb_project = "chatemg"
 gradient_accumulation_steps = 1
 batch_size = 64
-block_size = 256  # context of up to 256 previous characters
+block_size = 400  # context of up to 256 previous characters #noraxon emg 2000 imu 200
 split = 0.8  # 80% train, 20% val
 # preprocessing
 median_filter_size = 9

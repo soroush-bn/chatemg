@@ -46,6 +46,13 @@ class ChatEMGDataset(Dataset):
             X = np.clip(X, a_min=clip_min, a_max=clip_max)
             if median_filter_size != 1:
                 X = medfilt(X, kernel_size=[median_filter_size, 1])
+            
+            # downsampling by factor of 10 here if emg
+            print("before downsampling:", X.shape, y.shape)
+            if self.sensor_type == "emg":
+                X = X[::10]
+                y = y[::10]
+            print("after downsampling:", X.shape, y.shape)
             data_list.append(X)
             label_list.append(y)
 
