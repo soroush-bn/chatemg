@@ -126,6 +126,7 @@ if __name__ == "__main__":
         median_filter_size=args.median_filter_size
         if args.median_filter_size is not None
         else checkpoint["config"]["median_filter_size"],
+        sensor_type=sensor_types,
     )
     if not args.duplicate:
         real_x = mu.sample_from_dataset(test_dataset, args.num_samples)[0]

@@ -27,4 +27,3 @@ participants_list_ids = ["033106b27b","bc4dd952fe","31afab1e30","97c6aaac2d","70
 data_path = "/home/sbaghernezha/data/"
 sensor_type =  "emg"
 axis = "x"
-compile = False  # Disable model compilation to avoid hanging

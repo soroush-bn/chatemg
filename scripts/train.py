@@ -179,6 +179,7 @@ dataset = ChatEMGDataset(
     median_filter_size=median_filter_size,
     shift=True,
     flip=True,
+    sensor_type=sensor_type,
 )
 train_dataset, test_dataset = random_split(
     dataset, [split, 1 - split], generator=torch.Generator().manual_seed(split_seed)
