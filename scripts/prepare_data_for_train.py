@@ -65,7 +65,7 @@ if __name__ == "__main__":
                 print(f"Converted {sensor_type} data along {ax}-axis for participant: {participant_id}.")
         print(f"Conversion completed for participant: {participant_id}.")
     
-    merge_subjects("accel")
+    merge_subjects(sensor_type)
 
 #todo add merge function per person, for all participants.
 #todo adding df payin functionality
