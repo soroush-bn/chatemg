@@ -159,8 +159,10 @@ ctx = (
     if device_type == "cpu"
     else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 )
+
+emg_data_paths = [os.path.join(converted_data_path, subject_id, f"converted_emg.csv") for subject_id in participants_list_ids   ]
 # should be the converted one 
-sample_data_files = [
+sample_data_files = emg_data_paths if sensor_type == "emg" else [
     data_file_full_path,
 ]
 
