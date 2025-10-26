@@ -42,9 +42,9 @@ if __name__ == "__main__":
     for participant_id in participants_list_ids:
         participant_folder = os.path.join(saving_dir, participant_id)
         #check if already converted file exists 
-        if os.path.exists(os.path.join(participant_folder, saving_csv_name)):
-            print(f"Converted file already exists for participant: {participant_id}. Skipping conversion.")
-            continue
+        # if os.path.exists(os.path.join(participant_folder, saving_csv_name)):
+        #     print(f"Converted file already exists for participant: {participant_id}. Skipping conversion.")
+        #     continue
         if os.path.exists(participant_folder):
             pass
         else:
