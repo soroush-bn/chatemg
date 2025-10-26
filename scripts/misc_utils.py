@@ -114,6 +114,13 @@ def get_batch(
 def clean_dataframe(df,sensor_type):
     print(df.describe())
     X_df = keep_columns(df, [sensor_type]).copy()
+    
+    if X_df.empty or len(X_df.columns) == 0:
+        raise ValueError(
+            f"No columns found matching sensor_type '{sensor_type}'. "
+            f"Available columns: {list(df.columns)}. "
+            f"Please check that the sensor_type matches the columns in your CSV file."
+        )
 
     for col in X_df.columns:
         col_min = X_df[col].min()

@@ -40,6 +40,8 @@ class ChatEMGDataset(Dataset):
         for f in self.csv_files:
             data_path = f
             df = pd.read_csv(data_path, index_col=0)
+            #i want to see the type of gt values
+            print(df['gt'].dtype)
             X, y = mu.clean_dataframe(df,sensor_type)
             X = np.clip(X, a_min=clip_min, a_max=clip_max)
             if median_filter_size != 1:
@@ -130,12 +132,13 @@ class ChatEMGDataset(Dataset):
 if __name__ == "__main__":
     dataset = ChatEMGDataset(
         csv_files=[
-"../data/converted_accel_x.csv"
+"E:\projects\chatemgserver\chatemg\data\converted_accel_x.csv"
         ],
         filter_class=15,
         block_size=256,
         shift=True,
         flip=True,
+        median_filter_size=9,
         sensor_type="accel",
         axis=["x"],
     )
@@ -146,4 +149,4 @@ if __name__ == "__main__":
     print("here")
     print(dataset)
     print(len(dataset.filtered_data_list))
-    print(dataset.sample(10))
+    print(dataset.sample(1))
