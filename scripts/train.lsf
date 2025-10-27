@@ -10,7 +10,7 @@ conda activate buildrust
 python -m pip install --user tiktoken
 python -m pip install --user seaborn
 
-
+export WANDB_API_KEY=$(cat ~/.wandb_key)
 
 echo "=== nvidia-smi summary ==="
 if ! command -v nvidia-smi >/dev/null; then
