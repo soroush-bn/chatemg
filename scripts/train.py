@@ -41,7 +41,7 @@ always_save_checkpoint = True  # if True, always save a checkpoint after each ev
 init_from = "scratch"  # 'scratch'
 # wandb logging
 wandb_log = False  # disabled by default
-# wandb_project = "project_name"
+wandb_project = "chatemg"  # default project name
 # data
 gradient_accumulation_steps = 1  # used to simulate larger batch sizes
 batch_size = 64  # if gradient_accumulation_steps > 1, this is the micro-batch size
@@ -310,8 +310,25 @@ def get_lr(it):
 # logging
 if wandb_log and master_process:
     import wandb
-
-    wandb.init(project=wandb_project, name=exp_name, config=config)
+    
+    # Login for non-interactive environments (servers/LSF)
+    # First try to get API key from environment variable
+    wandb_api_key = os.environ.get('WANDB_API_KEY', None)
+    if wandb_api_key:
+        print("Logging into W&B using WANDB_API_KEY environment variable...")
+        wandb.login(key=wandb_api_key)
+    else:
+        # Try to use cached credentials
+        print("Warning: WANDB_API_KEY not found. Attempting to use cached credentials...")
+        try:
+            wandb.login()
+        except Exception as e:
+            print(f"W&B login failed: {e}")
+            print("Please set WANDB_API_KEY environment variable or run 'wandb login' manually")
+            wandb_log = False
+    
+    if wandb_log:
+        wandb.init(project=wandb_project, name=exp_name, config=config)
 
 # training loop
 X, Y = get_batch("train")  # fetch the very first batch

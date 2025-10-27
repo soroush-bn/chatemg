@@ -1,11 +1,11 @@
-exp_name = "sample_train"
+exp_name = "train-emg-allsubjects-2khz"
 filter_class = 15  
 eval_interval = 1000  # checkpoint interval, how often the checkpoint is saved (was 1000, reduced by 4x)
 eval_iters = 200
 log_interval = 10  # don't print too often
 always_save_checkpoint = True
-wandb_log = False  # override via command line if you like
-wandb_project = "chatemg"
+wandb_log = True  # Enable W&B logging (set WANDB_API_KEY environment variable)
+wandb_project = "chatemg-train-emg-allsubjects-2khz"
 gradient_accumulation_steps = 1
 batch_size = 64
 block_size = 400  # context of up to 256 previous characters #noraxon emg 2000 imu 200
