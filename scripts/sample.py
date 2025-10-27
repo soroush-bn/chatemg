@@ -170,6 +170,6 @@ if __name__ == "__main__":
         nrows=nrows,
         ncols=ncols,
         vertical_location=None,
-        save_fnm="real_vs_synthetic_15_emg_allsubjects.png",
+        save_fnm="real_vs_synthetic_15_emg_allsubjects_downsampled.png",
     )
     print("done")

@@ -11,4 +11,4 @@ python -m pip install --user tiktoken
 python -m pip install --user seaborn
 
 
-python sample.py --ckpt_path "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/sample_train_gpu-a9-n001_2025-10-26_12-51-21/iter_30000_train_0.0749693_val_0.0754782"
+python sample.py --ckpt_path "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/sample_train_gpu-a9-n006_2025-10-26_18-24-22/iter_30000_train_0.0000000_val_9.0051651"
