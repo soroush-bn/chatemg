@@ -89,8 +89,6 @@ converted_data_path = "../data/"
 sensor_type = "emg"
 axis = "x" 
 #todo make decison on this 
-data_file_full_path = os.path.join(converted_data_path, f"merged_{sensor_type}.csv")
-emg_data_paths = [os.path.join(converted_data_path, subject_id, f"converted_emg.csv") for subject_id in participants_list_ids   ]
 
 print("PARAMS SET")
 
@@ -161,6 +159,8 @@ ctx = (
     if device_type == "cpu"
     else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 )
+data_file_full_path = os.path.join(converted_data_path, f"merged_{sensor_type}.csv")
+emg_data_paths = [os.path.join(converted_data_path, subject_id, f"converted_emg.csv") for subject_id in participants_list_ids   ]
 
 # should be the converted one 
 sample_data_files = emg_data_paths if sensor_type == "emg" else [
