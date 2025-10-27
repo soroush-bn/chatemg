@@ -41,7 +41,7 @@ class ChatEMGDataset(Dataset):
             data_path = f
             df = pd.read_csv(data_path, index_col=0)
             #i want to see the type of gt values
-            print(df['gt'].dtype)
+            # print(df['gt'].dtype)
             X, y = mu.clean_dataframe(df,sensor_type)
             X = np.clip(X, a_min=clip_min, a_max=clip_max)
             if median_filter_size != 1:
