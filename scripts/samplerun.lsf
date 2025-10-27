@@ -9,6 +9,6 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
 python -m pip install --user tiktoken
 python -m pip install --user seaborn
-
+python -m pip install wandb
 export WANDB_API_KEY=$(cat ~/.wandb_key)
 python sample.py --ckpt_path "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/sample_train_gpu-a9-n006_2025-10-26_18-24-22/iter_30000_train_0.0000000_val_9.0051651"

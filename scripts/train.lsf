@@ -9,7 +9,7 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
 python -m pip install --user tiktoken
 python -m pip install --user seaborn
-
+python -m pip install wandb
 export WANDB_API_KEY=$(cat ~/.wandb_key)
 
 echo "=== nvidia-smi summary ==="
