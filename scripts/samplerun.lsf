@@ -7,8 +7,29 @@ module load miniconda/pytorch-tensorflow-gpu-2024.09
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
+
 python -m pip install --user tiktoken
 python -m pip install --user seaborn
 python -m pip install --user wandb==0.15.11
+
 export WANDB_API_KEY=$(cat ~/.wandb_key)
-python sample.py --ckpt_path "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/train-emg-allsubjects-2khz_gpu-a9-n006_2025-10-26_23-05-21/iter_30000_train_0.0451245_val_0.0453732"
+
+BASE_DIR="/home/sbaghernezha/projects/chatemg/chatemg/scripts/models"
+
+LATEST_MODEL=$(ls -d $BASE_DIR/*/ 2>/dev/null | sort -r | head -n 1)
+
+if [ -z "$LATEST_MODEL" ]; then
+    echo "No model folder found in '$BASE_DIR'"
+    exit 1
+fi
+
+LATEST_ITER=$(ls -d $LATEST_MODEL/iter_* 2>/dev/null | sort -r | head -n 1)
+
+if [ -z "$LATEST_ITER" ]; then
+    echo "No iteration folder found in '$LATEST_MODEL'"
+    exit 1
+fi
+
+echo "Using latest checkpoint: $LATEST_ITER"
+
+python sample.py --ckpt_path "$LATEST_ITER"

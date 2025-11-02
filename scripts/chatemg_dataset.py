@@ -22,6 +22,7 @@ class ChatEMGDataset(Dataset):
         flip=False,
         sensor_type="accel",
         axis="x",
+        which_file= "train"
     ):
         self.csv_files = csv_files
         self.filter_class = filter_class
@@ -40,6 +41,15 @@ class ChatEMGDataset(Dataset):
         for f in self.csv_files:
             data_path = f
             df = pd.read_csv(data_path, index_col=0)
+            # its just a workaround for now 
+            if which_file == "train":
+                # get 0 to 90% of data
+                split_index = int(0.9 * len(df))
+                df = df.iloc[:split_index]
+            else:
+                #get the last 10% of data
+                split_index = int(0.9 * len(df))
+                df = df.iloc[split_index:]
             #i want to see the type of gt values
             # print(df['gt'].dtype)
             X, y = mu.clean_dataframe(df,sensor_type)
@@ -52,7 +62,7 @@ class ChatEMGDataset(Dataset):
             # if self.sensor_type == "emg":
             #     X = X[::10]
             #     y = y[::10]
-            print("after downsampling:", X.shape, y.shape)
+            # print("after downsampling:", X.shape, y.shape)
             data_list.append(X)
             label_list.append(y)
 

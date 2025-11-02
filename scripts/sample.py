@@ -15,7 +15,10 @@ from torch.utils.data import random_split
 
 import misc_utils as mu
 from model import GPTConfig, GPT_interchannel
-
+import yaml
+#load yaml 
+with open("config.yaml", "r") as file:
+    config = yaml.safe_load(file)
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -30,15 +33,8 @@ def get_args():
         nargs="?",
         const=True,
     )
-    parser.add_argument("--prompt_size", type=int, default=150)
-    parser.add_argument("--token_len", type=int, default=256)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument(
-        "--top_k",
-        type=int,
-        default=200,
-        help="retain only the top_k most likely tokens, clamp others to have 0 probability",
-    )
+
     parser.add_argument(
         "--duplicate",
         type=lambda x: bool(strtobool(x)),
@@ -47,7 +43,6 @@ def get_args():
         const=True,
         help="ignore num of samples and generate data for the same prompt 9 times",
     )
-    parser.add_argument("--median_filter_size", type=int, default=9)
     parser.add_argument("--independent", type=bool, default=False)
     args = parser.parse_args()
 
@@ -63,12 +58,12 @@ if __name__ == "__main__":
     nrows = 3
     ncols = 3
     temperature = (
-        0.8  # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
+       config['temperature']  # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
     )
     seed = args.seed
-    device = "cuda"  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
-    dtype = "float16"  # 'float32' or 'bfloat16' or 'float16'
-    compile = True  # use PyTorch 2.0 to compile the model to be faster
+    device = config["device"]  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
+    dtype = config["dtype"]  # 'float32' or 'bfloat16' or 'float16'
+    compile = config["compile"]  # use PyTorch 2.0 to compile the model to be faster
     # -----------------------------------------------------------------------------
 
     np.random.seed(seed)
@@ -106,27 +101,28 @@ if __name__ == "__main__":
 
     model.eval()
     model.to(device)
-    if compile:
+    if config['compile']:
         model = torch.compile(model)  # requires PyTorch 2.0 (optional)
 
     from chatemg_dataset import ChatEMGDataset
 
-    participants_list_ids = ["033106b27b","bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d","ecfa481b42","e49db6578f","27f6898a3f","3f858df9cf","9780ed81f4"] #"bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d"]
-    converted_data_path = "../data/"
-    sensor_types = "emg"
-    axis = "x" 
-    csv_name = f"converted_{sensor_types}_{axis}.csv"
     #todo make decison on this 
-    data_file_full_path = os.path.join(converted_data_path, f"merged_{sensor_types}.csv")
+    data_file_full_path = os.path.join(config['converted_data_path'], f"merged_{config['sensor_type']}.csv")
+    emg_data_paths = [os.path.join(config['converted_data_path'], subject_id, f"converted_emg.csv") for subject_id in config['participants_list_ids']]
 
+# should be the converted one
+    sample_data_files = emg_data_paths if config['sensor_type'] == "emg" else [
+    data_file_full_path,
+]
     test_dataset = ChatEMGDataset(
-        csv_files=[data_file_full_path],
-        filter_class=filter_class,
-        block_size=args.token_len,
-        median_filter_size=args.median_filter_size
-        if args.median_filter_size is not None
+        csv_files=sample_data_files,
+        filter_class=config['filter_class'],
+        block_size=config['token_len'],
+        median_filter_size=config['median_filter_size']
+        if config['median_filter_size'] is not None
         else checkpoint["config"]["median_filter_size"],
-        sensor_type=sensor_types,
+        sensor_type=config['sensor_type'],
+        which_file= "sample"
     )
     if not args.duplicate:
         real_x = mu.sample_from_dataset(test_dataset, args.num_samples)[0]
@@ -170,6 +166,6 @@ if __name__ == "__main__":
         nrows=nrows,
         ncols=ncols,
         vertical_location=None,
-        save_fnm="real_vs_synthetic_15_emg_allsubjects_2khz.png",
+        save_fnm=f"real_vs_synthetic_{config['filter_class']}_{config['exp_name']}.png",
     )
     print("done")

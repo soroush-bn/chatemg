@@ -46,3 +46,31 @@ fi
 # Stop GPU monitoring
 kill $GPU_MONITOR_PID 2>/dev/null
 echo "GPU usage log saved to gpu_usage_log.csv"
+
+
+ -------------------------
+# Run sampling on the latest checkpoint
+# this will cause problem in instaances that im running mutiple jobs (last folder keep changing)
+# maybe put bsub inside this file
+
+BASE_DIR="/home/sbaghernezha/projects/chatemg/chatemg/scripts/models"
+
+LATEST_MODEL=$(ls -d $BASE_DIR/*/ 2>/dev/null | sort -r | head -n 1)
+
+if [ -z "$LATEST_MODEL" ]; then
+    echo "No model folder found in '$BASE_DIR'"
+    exit 1
+fi
+
+cp config.yaml "$LATEST_MODEL"
+
+LATEST_ITER=$(ls -d $LATEST_MODEL/iter_* 2>/dev/null | sort -r | head -n 1)
+
+if [ -z "$LATEST_ITER" ]; then
+    echo "No iteration folder found in '$LATEST_MODEL'"
+    exit 1
+fi
+
+echo "Using latest checkpoint: $LATEST_ITER"
+
+python sample.py --ckpt_path "$LATEST_ITER"
