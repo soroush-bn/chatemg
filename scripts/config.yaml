@@ -49,6 +49,8 @@ compile: true
 
 # Preprocessing
 median_filter_size: 9
+shift: true
+flip: true
 
 # Data files
 train_csv_files: []
