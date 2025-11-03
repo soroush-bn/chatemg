@@ -1,4 +1,4 @@
-exp_name: "emg-allsubjects_2khz_blocksize1000"
+exp_name: "emg-allsubjects_2khz_blocksize2000"
 filter_class: 0  # [0=relax, 1=open, 2=close]
 eval_interval: 1000
 log_interval: 10
@@ -9,7 +9,7 @@ init_from: "scratch"
 wandb_log: True
 gradient_accumulation_steps: 1
 batch_size: 64
-block_size: 1000
+block_size: 2000
 split: 0.8
 ckpt_path: null
 
