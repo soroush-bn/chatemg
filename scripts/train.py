@@ -135,7 +135,7 @@ save_dir = os.path.join(model_files_base_directory, exp_name)
 tokens_per_iter = config['gradient_accumulation_steps'] * ddp_world_size * config['batch_size'] * config['block_size']
 print(f"tokens per iteration will be: {tokens_per_iter:,}")
 if master_process:
-    os.makedirs(save_dir, exist_ok=False)
+    os.makedirs(save_dir, exist_ok=True)
 
 
 shutil.copy("config.yaml", os.path.join(save_dir, "config.yaml"))
