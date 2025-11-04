@@ -129,7 +129,7 @@ model_files_base_directory = os.path.join(
     pathlib.Path(__file__).resolve().parent.__str__(), "models"
 )
 # timestr = time.strftime("%Y-%m-%d_%H-%M-%S")
-exp_name = f"{config['exp_name']} "  #in this case experiment names should be unique otherwise rewrite # _{socket.gethostname()}_{timestr}"
+exp_name = config['exp_name']  #in this case experiment names should be unique otherwise rewrite # _{socket.gethostname()}_{timestr}"
 save_dir = os.path.join(model_files_base_directory, exp_name)
 
 tokens_per_iter = config['gradient_accumulation_steps'] * ddp_world_size * config['batch_size'] * config['block_size']
