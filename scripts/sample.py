@@ -3,7 +3,9 @@ Sample from a trained model
 """
 import argparse
 import os
+import pathlib
 import pickle
+import re
 from contextlib import nullcontext
 from setuptools._distutils.util import strtobool
 
@@ -84,10 +86,35 @@ if __name__ == "__main__":
         if device_type == "cpu"
         else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
     )
+    model_files_base_directory = os.path.join(
+        pathlib.Path(__file__).resolve().parent.__str__(), "models"
+    )
+    save_dir = os.path.join(model_files_base_directory, config['exp_name'])
 
     if init_from == "resume":
         # init from a model saved in a specific directory
-        ckpt_path = os.path.join(args.ckpt_path, "ckpt.pt")
+        # Find the folder with the highest iteration number
+        iter_folders = [f for f in os.listdir(save_dir) if f.startswith('iter_')]
+        if not iter_folders:
+            raise ValueError(f"No iteration folders found in {save_dir}")
+        
+        # Extract iteration numbers and find the maximum
+        max_iter = -1
+        max_iter_folder = None
+        for folder in iter_folders:
+            match = re.match(r'iter_(\d+)_', folder)
+            if match:
+                iter_num = int(match.group(1))
+                if iter_num > max_iter:
+                    max_iter = iter_num
+                    max_iter_folder = folder
+        
+        if max_iter_folder is None:
+            raise ValueError(f"Could not find valid iteration folders in {save_dir}")
+        
+        ckpt_folder = os.path.join(save_dir, max_iter_folder)
+        print(f"Using checkpoint from: {ckpt_folder}")
+        ckpt_path = os.path.join(ckpt_folder, "ckpt.pt")
         checkpoint = torch.load(ckpt_path, map_location=device)
         filter_class = checkpoint["config"]["filter_class"]
         gptconf = GPTConfig(**checkpoint["model_args"])
@@ -134,7 +161,7 @@ if __name__ == "__main__":
         if args.independent:
             x = torch.tensor(real_x, device=device)
         else:
-            x = torch.tensor(real_x[:, : args.prompt_size, :], device=device)
+            x = torch.tensor(real_x[:, : config['prompt_size'], :], device=device)
     else:
         x = torch.tensor(
             [[[0, 0, 0, 0, 0, 0, 0, 0]]] * args.num_samples,
@@ -144,13 +171,13 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         with ctx:
-            num_new_tokens = args.token_len - args.prompt_size
+            num_new_tokens = config['token_len'] - config['prompt_size']
             Y = model.generate(
                 x,
                 num_new_tokens,
                 temperature=temperature,
-                top_k=args.top_k,
-                prompt_size=args.prompt_size,
+                top_k=config['top_k'],
+                prompt_size=config['prompt_size'],
                 independent=args.independent,
             )
             Y = Y.cpu().numpy()

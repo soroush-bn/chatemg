@@ -11,6 +11,7 @@ import pathlib
 import pickle
 import re
 import socket
+import shutil
 
 # os.environ['TORCH_USE_CUDA_DSA'] = '1'  # for debugging purpose
 import time
@@ -127,14 +128,17 @@ else:
 model_files_base_directory = os.path.join(
     pathlib.Path(__file__).resolve().parent.__str__(), "models"
 )
-timestr = time.strftime("%Y-%m-%d_%H-%M-%S")
-exp_name = f"{config['exp_name']}_{socket.gethostname()}_{timestr}"
+# timestr = time.strftime("%Y-%m-%d_%H-%M-%S")
+exp_name = f"{config['exp_name']} "  #in this case experiment names should be unique otherwise rewrite # _{socket.gethostname()}_{timestr}"
 save_dir = os.path.join(model_files_base_directory, exp_name)
 
 tokens_per_iter = config['gradient_accumulation_steps'] * ddp_world_size * config['batch_size'] * config['block_size']
 print(f"tokens per iteration will be: {tokens_per_iter:,}")
 if master_process:
-    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(save_dir, exist_ok=False)
+
+
+shutil.copy("config.yaml", os.path.join(save_dir, "config.yaml"))
 
 np.random.seed(1337 + seed_offset)  # dataset is using numpy
 torch.manual_seed(1337 + seed_offset)
