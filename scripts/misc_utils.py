@@ -111,9 +111,22 @@ def get_batch(
     return x, y
 
 
-def clean_dataframe(df,sensor_type):
+def clean_dataframe(df,sensor_type,location="both"):
     print(df.describe())
-    X_df = keep_columns(df, [sensor_type]).copy()
+
+    if location == "both":
+        X_df = keep_columns(df, [sensor_type]).copy()
+    elif location == "forearm":
+        if sensor_type == "emg":
+            X_df = keep_columns(df, ["1","2","3","4"]).copy()
+        else:
+            X_df = keep_columns(df, [f"{sensor_type}_1",f"{sensor_type}_2",f"{sensor_type}_3",f"{sensor_type}_4"]).copy()
+    elif location == "wrist":
+        if sensor_type == "emg":
+            X_df = keep_columns(df, ["5","6","7","8"]).copy()
+        else:
+            X_df = keep_columns(df, [f"{sensor_type}_5",f"{sensor_type}_6",f"{sensor_type}_7",f"{sensor_type}_8"]).copy()
+
     
     if X_df.empty or len(X_df.columns) == 0:
         raise ValueError(

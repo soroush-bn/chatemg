@@ -22,7 +22,8 @@ class ChatEMGDataset(Dataset):
         flip=False,
         sensor_type="accel",
         axis="x",
-        which_file= "train"
+        which_file= "train",
+        location= "both"
     ):
         self.csv_files = csv_files
         self.filter_class = filter_class
@@ -30,6 +31,7 @@ class ChatEMGDataset(Dataset):
         self.shift = shift
         self.flip = flip
         self.sensor_type = sensor_type
+        self.location = location
         self.axis = axis
         data_list = []
         label_list = []
@@ -52,7 +54,7 @@ class ChatEMGDataset(Dataset):
                 df = df.iloc[split_index:]
             #i want to see the type of gt values
             # print(df['gt'].dtype)
-            X, y = mu.clean_dataframe(df,sensor_type)
+            X, y = mu.clean_dataframe(df,sensor_type,location)
             X = np.clip(X, a_min=clip_min, a_max=clip_max)
             if median_filter_size != 1:
                 X = medfilt(X, kernel_size=[median_filter_size, 1])
@@ -87,7 +89,7 @@ class ChatEMGDataset(Dataset):
         if self.shift:
             augment_list = []
             for d in self.filtered_data_list:
-                for i in range(1, 8):  # shift 7 times
+                for i in range(1, 8 if self.location == "both" else 4  ):  # shift 7 times
                     d_shifted = np.roll(d, i, axis=-1)
                     augment_list.append(d_shifted)
             for ad in augment_list:

@@ -180,7 +180,8 @@ dataset = ChatEMGDataset(
     shift=config['shift'],
     flip=config['flip'],
     sensor_type=config['sensor_type'],
-    which_file= "train"
+    which_file= "train",
+    location= config['location']
 )
 #split the dataset
 train_dataset, test_dataset = random_split(
