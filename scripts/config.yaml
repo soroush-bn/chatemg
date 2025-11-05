@@ -9,7 +9,7 @@ init_from: "scratch"
 wandb_log: True
 gradient_accumulation_steps: 1
 batch_size: 64
-block_size: 500
+block_size: 256
 split: 0.8
 ckpt_path: null
 
