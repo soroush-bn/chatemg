@@ -119,10 +119,7 @@ def clean_dataframe(df,sensor_type,location="both"):
     assert 'gt' in df.columns, "Ground truth 'gt' column not found in dataframe."
     assert sensor_type in ['emg', 'imu'], "sensor_type must be either 'emg' or 'imu'"
     assert location in ['both', 'forearm', 'wrist'], "location must be either 'both', 'forearm', or 'wrist'"
-    if not df['gt'].isin(range(18)).all():
-        print(df['gt'].unique())
-        raise ValueError("Ground truth 'gt' column contains values outside the range 0-17.")
-
+    assert len(df["gt"].unique()) == 17, "Ground truth 'gt' len is 17"
     if location == "both":
         X_df = keep_columns(df, [sensor_type]).copy()
     elif location == "forearm":

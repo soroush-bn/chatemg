@@ -45,15 +45,25 @@ class ChatEMGDataset(Dataset):
             df = pd.read_csv(data_path, index_col=0)
             print("11111111111111111111111111")
             print(df['gt'].unique())
-            # its just a workaround for now 
+            
+            # Stratified split - get 90%/10% of each label class
             if which_file == "train":
-                # get 0 to 90% of data
-                split_index = int(0.9 * len(df))
-                df = df.iloc[:split_index]
+                # Get first 90% of each label class
+                train_list = []
+                for label in df['gt'].unique():
+                    label_df = df[df['gt'] == label]
+                    split_index = int(0.9 * len(label_df))
+                    train_list.append(label_df.iloc[:split_index])
+                df = pd.concat(train_list, ignore_index=True)
             else:
-                #get the last 10% of data
-                split_index = int(0.9 * len(df))
-                df = df.iloc[split_index:]
+                # Get last 10% of each label class
+                test_list = []
+                for label in df['gt'].unique():
+                    label_df = df[df['gt'] == label]
+                    split_index = int(0.9 * len(label_df))
+                    test_list.append(label_df.iloc[split_index:])
+                df = pd.concat(test_list, ignore_index=True)
+            
             print("222222222222222222222222222")
             print(df['gt'].unique())
             
