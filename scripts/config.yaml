@@ -1,4 +1,4 @@
-exp_name: "emg-allsubjects_2khz_blocksize500"
+exp_name: "emg-allsubjects_2khz_blocksize256"
 filter_class: 0  # [0=relax, 1=open, 2=close]
 eval_interval: 1000
 log_interval: 10
