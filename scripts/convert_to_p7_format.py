@@ -10,42 +10,6 @@ label_mapping = {
     }
 
 
-def stratified_split(df, train_ratio=0.9, random_state=42):
-    """Split dataframe into train and test sets with stratification by 'gt' label.
-    
-    Args:
-        df: DataFrame with 'gt' column containing labels
-        train_ratio: Ratio of data to use for training (default 0.9 = 90%)
-        random_state: Random seed for reproducibility
-    
-    Returns:
-        train_df, test_df: Two dataframes with stratified split
-    """
-    train_list = []
-    test_list = []
-    
-    # Group by label and split each group
-    for label in df['gt'].unique():
-        label_df = df[df['gt'] == label].copy()
-        # Shuffle within each label group
-        label_df = label_df.sample(frac=1, random_state=random_state).reset_index(drop=True)
-        
-        # Split into train and test
-        split_idx = int(len(label_df) * train_ratio)
-        train_list.append(label_df.iloc[:split_idx])
-        test_list.append(label_df.iloc[split_idx:])
-    
-    # Concatenate all splits
-    train_df = pd.concat(train_list, ignore_index=True)
-    test_df = pd.concat(test_list, ignore_index=True)
-    
-    # Shuffle the final dataframes
-    train_df = train_df.sample(frac=1, random_state=random_state).reset_index(drop=True)
-    test_df = test_df.sample(frac=1, random_state=random_state).reset_index(drop=True)
-    
-    return train_df, test_df
-
-
 def convert_raw_values(df, normalize=True):
     for col in df.columns: 
         if "accel" in col : 
@@ -102,22 +66,9 @@ def get_emg_df(df,saving_dir=saving_dir): #final df
 
     print("Data types of columns:")
     print(new_df.dtypes)
-    
-    # Create stratified train/test splits
-    train_df, test_df = stratified_split(new_df, train_ratio=0.9, random_state=42)
-    
-    print(f"\nTrain set: {len(train_df)} samples")
-    print(f"Train labels: {sorted(train_df['gt'].unique())}")
-    print(f"Test set: {len(test_df)} samples")
-    print(f"Test labels: {sorted(test_df['gt'].unique())}")
-    
-    # Save both splits
-    train_name = os.path.join(saving_dir,'converted_emg_train.csv')
-    test_name = os.path.join(saving_dir,'converted_emg_test.csv')
-    train_df.to_csv(train_name, index=True)
-    test_df.to_csv(test_name, index=True)
-    
-    return train_df, test_df
+    save_name = os.path.join(saving_dir,'converted_emg.csv')
+    new_df.to_csv(save_name, index=True)
+    return new_df
 
 
 def get_IMU_df(df, type, axis,saving_dir=saving_dir):
@@ -157,27 +108,14 @@ def get_IMU_df(df, type, axis,saving_dir=saving_dir):
 
     print("Data types of columns:")
     print(new_df.dtypes)
-    
-    # Create stratified train/test splits
-    train_df, test_df = stratified_split(new_df, train_ratio=0.9, random_state=42)
-    
-    print(f"\nTrain set: {len(train_df)} samples")
-    print(f"Train labels: {sorted(train_df['gt'].unique())}")
-    print(f"Test set: {len(test_df)} samples")
-    print(f"Test labels: {sorted(test_df['gt'].unique())}")
-    
-    # Save both splits
-    train_name = os.path.join(saving_dir,f'converted_{type}_{axis}_train.csv')
-    test_name = os.path.join(saving_dir,f'converted_{type}_{axis}_test.csv')
-    train_df.to_csv(train_name, index=True)
-    test_df.to_csv(test_name, index=True)
-    
-    return train_df, test_df
+    save_name = os.path.join(saving_dir,f'converted_{type}_{axis}.csv')
+    new_df.to_csv(save_name, index=True)
+    return new_df
 
 if __name__ == "__main__":
     
     df = pd.read_csv('final_df.csv')
     df = convert_raw_values(df, normalize=False)
-    imu_train, imu_test = get_IMU_df(df,'accel','x')
-    emg_train, emg_test = get_emg_df(df)
-    print("\nConversion completed. Train and test files saved with stratified splits.")
+    imu_df = get_IMU_df(df,'accel','x')
+    emg_df=  get_emg_df(df)
+    print("\nConversion completed. File saved as 'converted_final_df.csv'")
