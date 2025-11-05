@@ -37,6 +37,7 @@ def convert_raw_values(df, normalize=True):
 def get_emg_df(df,saving_dir=saving_dir): #final df
     
     new_df = pd.DataFrame()
+    print("11111111111111111111111111")
     print(df['label'].unique())
     # Copy EMG data (emg1 to emg8), fill NaN with 0 and convert to int64
     for i in range(1, 9):
@@ -47,12 +48,14 @@ def get_emg_df(df,saving_dir=saving_dir): #final df
     print(df.isna().sum())
     #remove the rows where label == 'rest'
     df = df[df['label'] != 'rest']
+    print("w222222222222222222222222222")
+    print(df['label'].unique())
     # Set labels as 'gt' with numeric mapping
     new_df['gt'] = df['label'].fillna('None').map(label_mapping).fillna(0).astype('int64')
 
     # Print unique labels to debug
     print("\nUnique labels in the data:")
-    print(df['label'].unique())
+    print(new_df['gt'].unique())
 
     # Generate timestamps
     current_time = datetime.datetime.now()
