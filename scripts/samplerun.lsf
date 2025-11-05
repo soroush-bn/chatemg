@@ -10,7 +10,6 @@ conda activate buildrust
 
 python -m pip install --user tiktoken
 python -m pip install --user seaborn
-python -m pip install --user wandb==0.15.11
 
 
 python sample.py 
