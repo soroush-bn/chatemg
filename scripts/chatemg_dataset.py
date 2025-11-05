@@ -67,7 +67,8 @@ class ChatEMGDataset(Dataset):
             # print("after downsampling:", X.shape, y.shape)
             data_list.append(X)
             label_list.append(y)
-
+        print(f"Number of loaded files: {len(data_list)}")
+        print(label_list)
         # filtering data based on class labels
         self.filtered_data_list = data_list
         if self.filter_class is not None:
