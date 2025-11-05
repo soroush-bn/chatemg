@@ -98,20 +98,12 @@ if __name__ == "__main__":
         if not iter_folders:
             raise ValueError(f"No iteration folders found in {save_dir}")
         
-        # Extract iteration numbers and find the maximum
-        max_iter = -1
-        max_iter_folder = None
-        for folder in iter_folders:
-            match = re.match(r'iter_(\d+)_', folder)
-            if match:
-                iter_num = int(match.group(1))
-                if iter_num > max_iter:
-                    max_iter = iter_num
-                    max_iter_folder = folder
-        
-        if max_iter_folder is None:
-            raise ValueError(f"Could not find valid iteration folders in {save_dir}")
-        
+        for i in range(config["max_iters"],0,-1*config["eval_interval"]):
+            max_iter_folders = [f for f in iter_folders if f.startswith(f"iter_{i}")]
+            if max_iter_folders:
+                max_iter_folder = max_iter_folders[0]
+                break
+
         ckpt_folder = os.path.join(save_dir, max_iter_folder)
         print(f"Using checkpoint from: {ckpt_folder}")
         ckpt_path = os.path.join(ckpt_folder, "ckpt.pt")
@@ -195,5 +187,6 @@ if __name__ == "__main__":
         ncols=ncols,
         vertical_location=None,
         save_fnm=f"real_vs_synthetic_{config['filter_class']}_{config['exp_name']}.png",
+        save_dir=save_dir
     )
     print("done")

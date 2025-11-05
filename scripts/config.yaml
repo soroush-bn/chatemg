@@ -29,7 +29,7 @@ bias: false
 
 # Optimizer settings
 learning_rate: 0.001
-max_iters: 100000
+max_iters: 30000
 weight_decay: 0.1
 beta1: 0.9
 beta2: 0.99
@@ -38,7 +38,7 @@ grad_clip: 1.0
 # Learning rate decay
 decay_lr: true
 warmup_iters: 2000
-lr_decay_iters: 100000
+lr_decay_iters: 30000
 min_lr: 0.0001
 
 # System settings

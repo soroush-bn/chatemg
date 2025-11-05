@@ -1,3 +1,4 @@
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -22,6 +23,7 @@ def plot_emg_chunks_parallel(
     flatten=False,
     rmse=None,
     save_fnm=None,
+    save_dir=None
 ):
     """
     new plotting function that puts real and synthetic data in parallel.
@@ -70,7 +72,8 @@ def plot_emg_chunks_parallel(
     # handles, labels = axs[-1, -1].get_legend_handles_labels()
     # fig.legend(handles, labels)
     if save_fnm is not None:
-        plt.savefig(f"{save_fnm}", dpi=300, bbox_inches="tight")
+        name = os.path.join(save_dir, save_fnm) if save_dir is not None else save_fnm
+        plt.savefig(name, dpi=300, bbox_inches="tight")
     plt.show()
 
 
