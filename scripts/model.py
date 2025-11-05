@@ -163,12 +163,12 @@ class SumTokenEmbedding(nn.Module):
         super().__init__()
         self.config = config
         self.embeddings = nn.ModuleList(
-            [nn.Embedding(config.vocab_size, config.n_embd) for _ in range(8)]
+            [nn.Embedding(config.vocab_size, config.n_embd) for _ in range(config.n_channels)]
         )
 
     def forward(self, x):
         # B, T, C
-        x = [self.embeddings[i](x[:, :, i].long()) for i in range(8)]
+        x = [self.embeddings[i](x[:, :, i].long()) for i in range(self.config.n_channels)]
         return torch.sum(torch.stack(x, dim=-1), dim=-1)
 
 
@@ -176,14 +176,14 @@ class ConcatTokenEmbedding(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        assert config.n_embd % 8 == 0
+        assert config.n_embd % config.n_channels == 0
         self.embeddings = nn.ModuleList(
-            [nn.Embedding(config.vocab_size, config.n_embd // 8) for _ in range(8)]
+            [nn.Embedding(config.vocab_size, config.n_embd // config.n_channels) for _ in range(config.n_channels)]
         )
 
     def forward(self, x):
         # B, T, C
-        x = [self.embeddings[i](x[:, :, i].long()) for i in range(8)]
+        x = [self.embeddings[i](x[:, :, i].long()) for i in range(self.config.n_channels)]
         return torch.cat(x, dim=-1)
 
 
@@ -194,13 +194,13 @@ class TokenEmbedding(nn.Module):
         if config.token_embedding_type == "basic":
             self.embedding = nn.Embedding(config.vocab_size, config.n_embd)
         elif config.token_embedding_type == "FC":
-            self.embedding = nn.Linear(8, config.n_embd, bias=False)
+            self.embedding = nn.Linear(config.n_channels, config.n_embd, bias=False)
         elif (
             config.token_embedding_type == "FC_extended"
         ):  # first convert to one-hot encoding
             self.embedding = nn.Sequential(
                 OneHot(config.vocab_size),
-                nn.Linear(config.vocab_size * 8, config.n_embd, bias=False),
+                nn.Linear(config.vocab_size * config.n_channels, config.n_embd, bias=False),
             )
         elif config.token_embedding_type == "basic_sum":
             self.embedding = SumTokenEmbedding(config)
@@ -220,11 +220,12 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-    continuous: bool = False  # True: predicting 8 means in the lm_head
+    continuous: bool = False  # True: predicting n_channels means in the lm_head
     flatten: bool = False  # whether the EMG signals are flattened
     model_type: str = None
     numerical_encoding: bool = False  # whether to use numerical encoding
     token_embedding_type: str = "FC_extended"
+    n_channels: int = 8  
 
 
 class GPT_base(nn.Module):
@@ -441,13 +442,13 @@ class GPT_interchannel(GPT_base):
             )
             # go through all channels
             logits, _ = self(idx_cond)
-            for c in range(1, 8):
+            for c in range(1, self.config.n_channels):
                 logits_c, _ = self(idx_cond.roll(shifts=-(int(c)), dims=-1))
                 logits = torch.cat((logits, logits_c), dim=1)
 
             logits = logits.view(logits.shape[0], 1, logits.shape[1], logits.shape[2])
 
-            logits = logits[:, -1, :] / temperature  # (b, 8, 1000)
+            logits = logits[:, -1, :] / temperature  # (b, n_channels, 1000)
             # optionally crop the logits to only the top k options
             if top_k is not None:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))

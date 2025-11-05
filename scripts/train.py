@@ -226,6 +226,7 @@ model_args = dict(
     dropout=config['dropout'],
     model_type=config['model_type'],
     token_embedding_type=config['token_embedding_type'],
+    n_channels = 8 if config['location'] == "both" else 4
 )
 print(f"Token Embedding Type is set to {config['token_embedding_type']  }")
 
