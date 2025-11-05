@@ -40,9 +40,9 @@ def plot_emg_chunks_parallel(
     # missing the batch dimension
     if np.ndim(real_data) == 2 and not flatten:
         real_data = real_data[None, ...]
-    b, t = real_data.shape[:2]
+    b, t, num_channels = real_data.shape
     if flatten:
-        real_data = real_data.reshape(b, -1, 8)
+        real_data = real_data.reshape(b, -1, num_channels)
         t = real_data.shape[1]
     fig, axs = plt.subplots(figsize=(15, 12), nrows=nrows, ncols=ncols, squeeze=False)
 
@@ -51,7 +51,7 @@ def plot_emg_chunks_parallel(
 
     for i in range(nrows):
         for j in range(ncols):
-            for c in range(8):
+            for c in range(num_channels):
                 if i % 2 == 0:
                     y = real_data[i // 2 * ncols + j, :, c]
                     axs[i, j].set_ylabel("real")
@@ -115,7 +115,6 @@ def get_batch(
 
 
 def clean_dataframe(df,sensor_type,location="both"):
-    print(df.describe())
     assert 'gt' in df.columns, "Ground truth 'gt' column not found in dataframe."
     assert sensor_type in ['emg', 'imu'], "sensor_type must be either 'emg' or 'imu'"
     assert location in ['both', 'forearm', 'wrist'], "location must be either 'both', 'forearm', or 'wrist'"
