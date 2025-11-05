@@ -37,7 +37,7 @@ def convert_raw_values(df, normalize=True):
 def get_emg_df(df,saving_dir=saving_dir): #final df
     
     new_df = pd.DataFrame()
-
+    print(df['label'].unique())
     # Copy EMG data (emg1 to emg8), fill NaN with 0 and convert to int64
     for i in range(1, 9):
         new_df[f'emg{i}'] = df[f'emg{i}'].fillna(0).astype('int64')
