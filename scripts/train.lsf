@@ -15,10 +15,6 @@ export WANDB_API_KEY=$(cat ~/.wandb_key)
 
 export PYTHONUNBUFFERED=1
 
-# Echo git branch and commit information
-echo "Git Branch: $(git rev-parse --abbrev-ref HEAD)"
-echo "Git Commit: $(git rev-parse HEAD)"
-echo "Git Commit (short): $(git rev-parse --short HEAD)"
 
 python prepare_data_for_train.py
 
@@ -48,6 +44,12 @@ else
     echo "Launching single GPU training"
     python -u train.py 
 fi
+
+# Echo git branch and commit information
+echo "Git Branch: $(git rev-parse --abbrev-ref HEAD)"
+echo "Git Commit: $(git rev-parse HEAD)"
+echo "Git Commit (short): $(git rev-parse --short HEAD)"
+
 
 # Stop GPU monitoring
 kill $GPU_MONITOR_PID 2>/dev/null
