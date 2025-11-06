@@ -10,6 +10,6 @@ conda activate buildrust
 
 python -m pip install --user tiktoken
 python -m pip install --user seaborn
-echo "Config argument: $1"
+echo "Config argument: $CONFIG"
 
-python sample.py --config "$1"
+python sample.py --config "$CONFIG"

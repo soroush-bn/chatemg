@@ -19,7 +19,7 @@ export PYTHONUNBUFFERED=1
 echo "Git Branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "Git Commit: $(git rev-parse HEAD)"
 echo "Git Commit (short): $(git rev-parse --short HEAD)"
-echo "Config argument: $1"
+echo "Config argument: $CONFIG"
 
 python prepare_data_for_train.py
 
@@ -31,10 +31,10 @@ echo "Number of GPUs detected: $NUM_GPUS"
 # Launch distributed training with torchrun if multiple GPUs, otherwise single GPU
 if [ "$NUM_GPUS" -gt 1 ]; then
     echo "Launching distributed training on $NUM_GPUS GPUs"
-    torchrun --standalone --nproc_per_node=$NUM_GPUS train.py --config "$1"
+    torchrun --standalone --nproc_per_node=$NUM_GPUS train.py --config "$CONFIG"
 else
     echo "Launching single GPU training"
-    python -u train.py --config "$1"
+    python -u train.py --config "$CONFIG"
 fi
 
 # Echo git branch and commit information
