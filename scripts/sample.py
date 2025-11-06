@@ -18,8 +18,15 @@ from torch.utils.data import random_split
 import misc_utils as mu
 from model import GPTConfig, GPT_interchannel
 import yaml
+
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--config', type=str, default='config.yaml', help='Path to config file')
+args = parser.parse_args()
+
 #load yaml 
-with open("config.yaml", "r") as file:
+with open(args.config, "r") as file:
     config = yaml.safe_load(file)
 
 def get_args():

@@ -4,7 +4,14 @@ import pandas as pd
 import numpy as np
 import yaml
 #load yaml 
-with open("config.yaml", "r") as file:
+
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--config', type=str, default='config.yaml', help='Path to config file')
+args = parser.parse_args()
+
+with open(args.config, "r") as file:
     config = yaml.safe_load(file)
 
 saving_csv_name = f"converted_{config['sensor_type']}_{config['axis']}.csv" if config['sensor_type'] != "emg" else "converted_emg.csv"
