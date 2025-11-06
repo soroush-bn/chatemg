@@ -43,8 +43,6 @@ class ChatEMGDataset(Dataset):
         for f in self.csv_files:
             data_path = f
             df = pd.read_csv(data_path, index_col=0)
-            print("11111111111111111111111111")
-            print(df['gt'].unique())
             
             # Stratified split - get 90%/10% of each label class
             if which_file == "train":
@@ -63,9 +61,6 @@ class ChatEMGDataset(Dataset):
                     split_index = int(0.9 * len(label_df))
                     test_list.append(label_df.iloc[split_index:])
                 df = pd.concat(test_list, ignore_index=True)
-            
-            print("222222222222222222222222222")
-            print(df['gt'].unique())
             
             #i want to see the type of gt values
             # print(df['gt'].dtype)

@@ -132,8 +132,6 @@ def clean_dataframe(df,sensor_type,location="both"):
         else:
             X_df = keep_columns(df, [f"{sensor_type}_5",f"{sensor_type}_6",f"{sensor_type}_7",f"{sensor_type}_8"]).copy()
 
-    print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
-    print(X_df.describe())
     if X_df.empty or len(X_df.columns) == 0:
         raise ValueError(
             f"No columns found matching sensor_type '{sensor_type}'. "
