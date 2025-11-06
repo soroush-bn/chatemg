@@ -24,7 +24,7 @@ echo "Git Commit: $(git rev-parse HEAD)"
 echo "Git Commit (short): $(git rev-parse --short HEAD)"
 echo "Config argument: $CONFIG"
 
-python prepare_data_for_train.py
+python prepare_data_for_train.py --config "$CONFIG"
 
 # Get number of GPUs available
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
