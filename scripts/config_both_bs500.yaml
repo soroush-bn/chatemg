@@ -1,0 +1,72 @@
+exp_name: "emg_bs500_both"
+filter_class: 0  # [0=relax, 1=open, 2=close]
+eval_interval: 1000
+log_interval: 10
+eval_iters: 200
+eval_only: false
+always_save_checkpoint: true
+init_from: "scratch"
+wandb_log: True
+gradient_accumulation_steps: 1
+batch_size: 64
+block_size: 500
+split: 0.8
+ckpt_path: null
+
+#sensor configuration
+participants_list_ids : ["033106b27b","bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d","ecfa481b42","e49db6578f","27f6898a3f","3f858df9cf","9780ed81f4"] #"bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d"]
+sensor_type : "emg"
+axis : "x"
+location : "both"  # "forearm", "wrist", "both"
+# Model architecture
+model_type: "GPT_interchannel"
+token_embedding_type: "basic_sum"
+n_layer: 12
+n_head: 8
+n_embd: 256
+dropout: 0.2
+bias: false
+
+# Optimizer settings
+learning_rate: 0.001
+max_iters: 30000
+weight_decay: 0.1
+beta1: 0.9
+beta2: 0.99
+grad_clip: 1.0
+
+# Learning rate decay
+decay_lr: true
+warmup_iters: 100
+lr_decay_iters: 30000
+min_lr: 0.0001
+
+# System settings
+backend: "nccl"
+device: "cuda"
+dtype: "float16"
+compile: true
+
+# Preprocessing
+median_filter_size: 9
+shift: true
+flip: true
+
+# Data files
+train_csv_files: []
+test_csv_files: []
+raw_data_path : "/home/sbaghernezha/data/"
+df_raw_name : "final_df.csv"
+converted_data_path: "../data/"
+
+# Additional settings
+split_seed: 42
+vocab_size: 1000
+
+
+### Sample Config
+
+prompt_size : 250
+token_len: 500
+top_k: 200
+temperature : 0.8
