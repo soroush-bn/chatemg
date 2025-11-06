@@ -21,16 +21,9 @@ import yaml
 
 import argparse
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--config', type=str, default='config.yaml', help='Path to config file')
-args = parser.parse_args()
-
-#load yaml 
-with open(args.config, "r") as file:
-    config = yaml.safe_load(file)
-
 def get_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='config.yaml', help='Path to config file')
     parser.add_argument("--ckpt_path", type=str)
     parser.add_argument("--num_samples", type=int, default=9)
     parser.add_argument("--nrows", type=int, default=3)
@@ -58,8 +51,13 @@ def get_args():
     return args
 
 
+
 if __name__ == "__main__":
     args = get_args()
+
+    with open(args.config, "r") as file:
+        config = yaml.safe_load(file)
+
     # some other parameters
     # -----------------------------------------------------------------------------
     init_from = "resume"
