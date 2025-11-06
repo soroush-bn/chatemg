@@ -11,7 +11,7 @@ python -m pip install --user tiktoken
 python -m pip install --user seaborn
 python -m pip install --user wandb==0.15.11
 export WANDB_API_KEY=$(cat ~/.wandb_key)
-
+echo "Config argument: $1"
 
 export PYTHONUNBUFFERED=1
 # Echo git branch and commit information
@@ -29,10 +29,10 @@ echo "Number of GPUs detected: $NUM_GPUS"
 # Launch distributed training with torchrun if multiple GPUs, otherwise single GPU
 if [ "$NUM_GPUS" -gt 1 ]; then
     echo "Launching distributed training on $NUM_GPUS GPUs"
-    torchrun --standalone --nproc_per_node=$NUM_GPUS train.py 
+    torchrun --standalone --nproc_per_node=$NUM_GPUS train.py --config "$1"
 else
     echo "Launching single GPU training"
-    python -u train.py 
+    python -u train.py --config "$1"
 fi
 # Echo git branch and commit information
 echo "Git Branch: $(git rev-parse --abbrev-ref HEAD)"
@@ -40,4 +40,4 @@ echo "Git Commit: $(git rev-parse HEAD)"
 echo "Git Commit (short): $(git rev-parse --short HEAD)"
 
 
-python sample.py 
+python sample.py --config "$1"

@@ -29,8 +29,15 @@ import torch.distributed as dist
 from chatemg_dataset import ChatEMGDataset
 from model import GPTConfig, GPT_interchannel
 
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--config', type=str, default='config.yaml', help='Path to config file')
+args = parser.parse_args()
+
+
 #load yaml 
-with open("config.yaml", "r") as file:
+with open(args.config, "r") as file:
     config = yaml.safe_load(file)
 
 print("LIBS LOADED")
