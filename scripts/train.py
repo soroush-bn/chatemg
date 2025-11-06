@@ -145,7 +145,7 @@ if master_process:
     os.makedirs(save_dir, exist_ok=True)
 
 
-shutil.copy("config.yaml", os.path.join(save_dir, "config.yaml"))
+shutil.copy(args.config, os.path.join(save_dir, args.config))
 
 np.random.seed(1337 + seed_offset)  # dataset is using numpy
 torch.manual_seed(1337 + seed_offset)
