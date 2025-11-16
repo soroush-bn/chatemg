@@ -3,11 +3,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from scipy.signal import medfilt
+from scipy.signal import medfilt, butter, filtfilt
 import seaborn as sns
 from matplotlib.lines import Line2D
 import matplotlib.font_manager
 from scipy.signal import resample_poly
+from scipy.signal import butter, filtfilt
 
 from_int_to_str = {0: "relax", 1: "open", 2: "close"}
 
@@ -210,16 +211,20 @@ def compute_mse(y, y_hat, starting_pos):
     )
 
 def downsample_with_proper_filter(df, factor=2):
-    """Downsample with proper low-pass anti-aliasing filter using resample_poly"""
+    """Downsample with proper low-pass anti-aliasing filter that preserves label alignment"""
+    
+    nyquist_freq = 0.5 / factor 
+    b, a = butter(N=4, Wn=nyquist_freq, btype='low', analog=False)
+    
     data_array = df.values
+    filtered_data = np.zeros_like(data_array)
     
-    first_channel_resampled = resample_poly(data_array[:, 0], up=1, down=factor, axis=0)
-    output_length = len(first_channel_resampled)
+    for ch in range(data_array.shape[1]):
+        if df.columns[ch] == 'gt' or df.dtypes[ch] == 'object':
+            filtered_data[:, ch] = data_array[:, ch]
+        else:
+            filtered_data[:, ch] = filtfilt(b, a, data_array[:, ch])
     
-    filtered_data = np.zeros((output_length, data_array.shape[1]))
-    filtered_data[:, 0] = first_channel_resampled  # Use the already computed first channel
+    decimated_data = filtered_data[::factor]
     
-    for ch in range(1, data_array.shape[1]):
-        filtered_data[:, ch] = resample_poly(data_array[:, ch], up=1, down=factor, axis=0)
-    
-    return pd.DataFrame(filtered_data, columns=df.columns)
+    return pd.DataFrame(decimated_data, columns=df.columns)
