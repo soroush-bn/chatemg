@@ -211,8 +211,13 @@ def compute_mse(y, y_hat, starting_pos):
 
 def downsample_with_proper_filter(df, factor=2):
     """Downsample with proper low-pass anti-aliasing filter using resample_poly"""
-    filtered_data = np.zeros((len(df) // factor, df.shape[1]))
-    for ch in range(df.shape[1]):
+    first_channel_resampled = resample_poly(df.iloc[:, 0], up=1, down=factor, axis=0)
+    output_length = len(first_channel_resampled)
+    
+    filtered_data = np.zeros((output_length, df.shape[1]))
+    filtered_data[:, 0] = first_channel_resampled  
+    
+    for ch in range(1, df.shape[1]):
         filtered_data[:, ch] = resample_poly(df.iloc[:, ch], up=1, down=factor, axis=0)
     
     return pd.DataFrame(filtered_data, columns=df.columns)
