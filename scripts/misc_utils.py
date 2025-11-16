@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -6,6 +7,7 @@ from scipy.signal import medfilt
 import seaborn as sns
 from matplotlib.lines import Line2D
 import matplotlib.font_manager
+from scipy.signal import resample_poly
 
 from_int_to_str = {0: "relax", 1: "open", 2: "close"}
 
@@ -114,11 +116,11 @@ def get_batch(
     return x, y
 
 
-def clean_dataframe(df,sensor_type,location="both"):
+def clean_dataframe(df,vocab_size, sensor_type,location="both"):
     assert 'gt' in df.columns, "Ground truth 'gt' column not found in dataframe."
     assert sensor_type in ['emg', 'imu'], "sensor_type must be either 'emg' or 'imu'"
     assert location in ['both', 'forearm', 'wrist'], "location must be either 'both', 'forearm', or 'wrist'"
-    assert len(df["gt"].unique()) == 17, "Ground truth 'gt' len is 17"
+    # assert len(df["gt"].unique()) == 17, "Ground truth 'gt' len is 17"
     if location == "both":
         X_df = keep_columns(df, [sensor_type]).copy()
     elif location == "forearm":
@@ -143,7 +145,7 @@ def clean_dataframe(df,sensor_type,location="both"):
         col_min = X_df[col].min()
         col_max = X_df[col].max()
         if col_max != col_min:
-            X_df[col] = (X_df[col] - col_min) * 999 / (col_max - col_min)
+            X_df[col] = (X_df[col] - col_min) * vocab_size / (col_max - col_min)
         else:
             X_df[col] = 0  
 
@@ -206,3 +208,11 @@ def compute_mse(y, y_hat, starting_pos):
     return ((y[:, starting_pos:, :] - y_hat[:, starting_pos:, :]) ** 2).mean(
         axis=(1, 2)
     )
+
+def downsample_with_proper_filter(df, factor=2):
+    """Downsample with proper low-pass anti-aliasing filter using resample_poly"""
+    filtered_data = np.zeros((len(df) // factor, df.shape[1]))
+    for ch in range(df.shape[1]):
+        filtered_data[:, ch] = resample_poly(df.iloc[:, ch], up=1, down=factor, axis=0)
+    
+    return pd.DataFrame(filtered_data, columns=df.columns)

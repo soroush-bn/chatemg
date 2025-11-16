@@ -183,6 +183,8 @@ dataset = ChatEMGDataset(
     csv_files=sample_data_files,
     filter_class=config['filter_class'],
     block_size=config['block_size'],
+    vocab_size=config['vocab_size'],
+    ds_factor=config['ds_factor'],
     median_filter_size=config['median_filter_size'],
     shift=config['shift'],
     flip=config['flip'],
@@ -220,7 +222,6 @@ def get_batch(split):
 
 iter_num = 0
 best_val_loss = 1e9
-vocab_size = 1000
 
 # model init
 model_args = dict(
@@ -229,7 +230,7 @@ model_args = dict(
     n_embd=config['n_embd'],
     block_size=config['block_size'],
     bias=config['bias'],
-    vocab_size=None,
+    vocab_size=config['vocab_size'],
     dropout=config['dropout'],
     model_type=config['model_type'],
     token_embedding_type=config['token_embedding_type'],
@@ -239,7 +240,7 @@ print(f"Token Embedding Type is set to {config['token_embedding_type']  }")
 
 # init a new model from scratch
 print("Initializing a new model from scratch")
-model_args["vocab_size"] = vocab_size
+model_args["vocab_size"] = config['vocab_size']
 gptconf = GPTConfig(**model_args)
 model = GPT_interchannel(gptconf)
 

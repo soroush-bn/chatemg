@@ -17,6 +17,8 @@ class ChatEMGDataset(Dataset):
         block_size,
         clip_min=0,
         clip_max=999,
+        vocab_size=128,
+        ds_factor = 2 ,
         median_filter_size=1,
         shift=False,
         flip=False,
@@ -32,6 +34,7 @@ class ChatEMGDataset(Dataset):
         self.flip = flip
         self.sensor_type = sensor_type
         self.location = location
+        self.vocab_size = vocab_size
         self.axis = axis
         data_list = []
         label_list = []
@@ -64,7 +67,9 @@ class ChatEMGDataset(Dataset):
             
             #i want to see the type of gt values
             # print(df['gt'].dtype)
-            X, y = mu.clean_dataframe(df,sensor_type,location)
+            if ds_factor> 1 :
+                df =mu.downsample_with_proper_filter(df, factor= ds_factor)
+            X, y = mu.clean_dataframe(df,vocab_size,sensor_type,location)
             X = np.clip(X, a_min=clip_min, a_max=clip_max)
             if median_filter_size != 1:
                 X = medfilt(X, kernel_size=[median_filter_size, 1])

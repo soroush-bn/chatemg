@@ -142,6 +142,8 @@ if __name__ == "__main__":
         csv_files=sample_data_files,
         filter_class=config['filter_class'],
         block_size=config['token_len'],
+        vocab_size=config['vocab_size'],
+        ds_factor= config['ds_factor'],
         median_filter_size=config['median_filter_size']
         if config['median_filter_size'] is not None
         else checkpoint["config"]["median_filter_size"],
