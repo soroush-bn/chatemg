@@ -46,9 +46,9 @@ if __name__ == "__main__":
     for participant_id in config['participants_list_ids']:
         participant_folder = os.path.join(config["converted_data_path"], participant_id)
         # check if already converted file exists 
-        if os.path.exists(os.path.join(participant_folder, saving_csv_name)):
-            print(f"Converted file already exists for participant: {participant_id}. Skipping conversion.")
-            continue
+        # if os.path.exists(os.path.join(participant_folder, saving_csv_name)):
+        #     print(f"Converted file already exists for participant: {participant_id}. Skipping conversion.")
+        #     continue
         if os.path.exists(participant_folder):
             pass
         else:
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         csv_path1 = os.path.join(os.path.join(config["raw_data_path"], participant_id), config["df_raw_name"])
         print(f"Reading data from: {csv_path1}")
         df1 = pd.read_csv(csv_path1)
-        df1 = convert_raw_values(df1, normalize=False)
+        df1 = convert_raw_values(df1, normalize=config["normalize"])
         print(f"Converted raw values for participant: {participant_id}.")
         if config['sensor_type'] == "emg":
             emg_df = get_emg_df(df1,saving_dir=participant_folder)

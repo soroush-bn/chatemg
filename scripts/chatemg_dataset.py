@@ -67,8 +67,12 @@ class ChatEMGDataset(Dataset):
             
             #i want to see the type of gt values
             # print(df['gt'].dtype)
+            print("df before downsampling:", df.shape)
+            print(df.describe())
             if ds_factor> 1 :
                 df =mu.downsample_with_proper_filter(df, factor= ds_factor)
+            print("df after downsampling:", df.shape)
+            print(df.describe())
             X, y = mu.clean_dataframe(df,vocab_size,sensor_type,location)
             X = np.clip(X, a_min=clip_min, a_max=clip_max)
             if median_filter_size != 1:

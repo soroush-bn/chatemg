@@ -63,7 +63,7 @@ converted_data_path: "../data/"
 split_seed: 42
 vocab_size: 1000
 ds_factor: 2
-
+normalize: false
 
 ### Sample Config
 
