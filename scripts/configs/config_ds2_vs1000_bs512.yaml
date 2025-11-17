@@ -1,4 +1,6 @@
-exp_name: "emg_ds2_vs64_bs512"
+exp_name: "emg_ds2_vs1000_bs512"
+wandb_project_name : "vocab_size_comparison"
+
 filter_class: 0  # [0=relax, 1=open, 2=close]
 eval_interval: 1000
 log_interval: 10
@@ -61,10 +63,9 @@ converted_data_path: "../data/"
 
 # Additional settings
 split_seed: 42
-vocab_size: 64
+vocab_size: 1000
 ds_factor: 2
 normalize: false
-
 
 ### Sample Config
 

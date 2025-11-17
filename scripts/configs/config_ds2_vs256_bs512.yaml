@@ -1,4 +1,5 @@
 exp_name: "emg_ds2_vs256_bs512"
+wandb_project_name : "vocab_size_comparison"
 filter_class: 0  # [0=relax, 1=open, 2=close]
 eval_interval: 1000
 log_interval: 10

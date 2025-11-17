@@ -338,7 +338,7 @@ if config['wandb_log'] and master_process:
             wandb_log = False
 
     if config['wandb_log']:
-        wandb.init(project=config['exp_name'], name=config['exp_name'], config=config)
+        wandb.init(project=config['wandb_project_name'], name=config['exp_name'], config=config)
 
 # training loop
 X, Y = get_batch("train")  # fetch the very first batch
