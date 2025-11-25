@@ -328,7 +328,7 @@ class GPT_interchannel(GPT_base):
 
         self.transformer_channel = nn.ModuleDict(
             dict(
-                wte=nn.Embedding(1000, config.n_embd),
+                wte=nn.Embedding(config.vocab_size, config.n_embd),
                 wpe=nn.Embedding(
                     config.block_size, config.n_embd
                 ),  # word position embedding
