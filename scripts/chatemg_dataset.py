@@ -92,6 +92,9 @@ class ChatEMGDataset(Dataset):
         print(label_list)
         # filtering data based on class labels
         self.filtered_data_list = data_list
+        print("filter class is" , self.filter_class)
+        print("block size is" , self.block_size)
+        print("len data list is" , len(data_list))
         if self.filter_class is not None:
             self.filtered_data_list = []
             for d, l in zip(data_list, label_list):
@@ -102,11 +105,12 @@ class ChatEMGDataset(Dataset):
                         if i + 1 == len(d) or l[i + 1] != self.filter_class:
                             self.filtered_data_list.append(np.array(filtered_d))
                             filtered_d = []
+        print("after filtering class, number of chunks is" , len(self.filtered_data_list))
         # now I am removing chunks shorter than block size + 1, because we need to consider y as well
         self.filtered_data_list = [
             d for d in self.filtered_data_list if len(d) >= (self.block_size + 1)
         ]
-
+        print("after removing short chunks, number of chunks is" , len(self.filtered_data_list))
         # Data augmentation for inter-channel setup
         if self.shift:
             augment_list = []
