@@ -110,8 +110,8 @@ class ChatEMGDataset(Dataset):
                             filtered_d = []
 
 
-        for d in self.filtered_data_list:
-            uniques , counts = np.unique(d,return_counts=True)
+        for l in label_list:
+            uniques , counts = np.unique(l,return_counts=True)
             print(f"Unique values in chunk: {dict(zip(uniques,counts))}")
         print(f"Chunk shapes: {[d.shape for d in self.filtered_data_list]}")
         # now I am removing chunks shorter than block size + 1, because we need to consider y as well
