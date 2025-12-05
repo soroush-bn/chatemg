@@ -96,7 +96,11 @@ class ChatEMGDataset(Dataset):
         print("filter class is" , self.filter_class)
         print("block size is" , self.block_size)
         print(f"Chunk shapes: {[d.shape for d in self.filtered_data_list]}")
+        
 
+        for l in label_list:
+            uniques , counts = np.unique(l,return_counts=True)
+            print(f"Unique values in chunk: {dict(zip(uniques,counts))}")
         if self.filter_class is not None:
             self.filtered_data_list = []
             for d, l in zip(data_list, label_list):
