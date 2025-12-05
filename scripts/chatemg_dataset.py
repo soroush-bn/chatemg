@@ -100,6 +100,7 @@ class ChatEMGDataset(Dataset):
         if self.filter_class is not None:
             self.filtered_data_list = []
             for d, l in zip(data_list, label_list):
+                
                 filtered_d = []
                 for i in range(len(d)):
                     if l[i] == self.filter_class:
@@ -107,16 +108,17 @@ class ChatEMGDataset(Dataset):
                         if i + 1 == len(d) or l[i + 1] != self.filter_class:
                             self.filtered_data_list.append(np.array(filtered_d))
                             filtered_d = []
-        print(f"Chunk shapes: {[d.shape for d in self.filtered_data_list]}")
 
+        print(f"Chunk shapes: {[d.shape for d in self.filtered_data_list]}")
+        print(f"Chunk types: {[type(d) for d in self.filtered_data_list]}")
+        print(d)
+        print(l)
         # now I am removing chunks shorter than block size + 1, because we need to consider y as well
 
         self.filtered_data_list = [
             d for d in self.filtered_data_list if len(d) >= (self.block_size + 1)
         ]
         print("after removing short chunks, number of chunks is" , len(self.filtered_data_list))
-        print(f"Chunk shapes: {[d.shape for d in self.filtered_data_list]}")
-
         # Data augmentation for inter-channel setup
         if self.shift:
             augment_list = []
