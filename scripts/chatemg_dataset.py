@@ -44,49 +44,44 @@ class ChatEMGDataset(Dataset):
             raise Exception("Manual Exception: median_filter_size is not of type int")
         if median_filter_size != 1:
             print(f"Using median filter with size {median_filter_size}")
+        df_all_subjects = pd.DataFrame()
         for f in self.csv_files:
             data_path = f
             df = pd.read_csv(data_path, index_col=0)
             
             # Stratified split - get 90%/10% of each label class
             if which_file == "train":
-                # Get first 90% of each label class
+                # Get first three rep
                 train_list = []
                 for label in df['gt'].unique():
                     label_df = df[df['gt'] == label]
-                    split_index = int(0.9 * len(label_df))
+                    split_index = int(0.7 * len(label_df))
                     train_list.append(label_df.iloc[:split_index])
                 df = pd.concat(train_list, ignore_index=True)
             else:
-                # Get last 10% of each label class
+                # Get last rep
                 test_list = []
                 for label in df['gt'].unique():
                     label_df = df[df['gt'] == label]
-                    split_index = int(0.9 * len(label_df))
+                    split_index = int(0.7 * len(label_df))
                     test_list.append(label_df.iloc[split_index:])
                 df = pd.concat(test_list, ignore_index=True)
+            df_all_subjects = pd.concat([df_all_subjects, df], ignore_index=True)
             
-            #i want to see the type of gt values
-            # print(df['gt'].dtype)
-            print("df before downsampling:", df.shape)
-            print(df["gt"].unique())
-            print(df.describe())
+
+            print("df before downsampling:", df_all_subjects.shape)
+            print(df_all_subjects["gt"].unique())
+            print(df_all_subjects.describe())
             if ds_factor> 1 :
-                df =mu.downsample_with_proper_filter(df, factor= ds_factor)
-            print("df after downsampling:", df.shape)
-            print(df["gt"].unique())
-            print(df.describe())
-            X, y = mu.clean_dataframe(df,vocab_size,sensor_type,location)
+                df_all_subjects =mu.downsample_with_proper_filter(df_all_subjects, factor= ds_factor)
+            print("df after downsampling:", df_all_subjects.shape)
+            print(df_all_subjects["gt"].unique())
+            print(df_all_subjects.describe())
+            X, y = mu.clean_dataframe(df_all_subjects,vocab_size,sensor_type,location)
             X = np.clip(X, a_min=clip_min, a_max=clip_max)
             if median_filter_size != 1:
                 X = medfilt(X, kernel_size=[median_filter_size, 1])
             
-            # downsampling by factor of 10 here if emg
-            # print("before downsampling:", X.shape, y.shape)
-            # if self.sensor_type == "emg":
-            #     X = X[::10]
-            #     y = y[::10]
-            # print("after downsampling:", X.shape, y.shape)
             data_list.append(X)
             label_list.append(y)
         print(f"Number of loaded files: {len(data_list)}")
@@ -96,15 +91,11 @@ class ChatEMGDataset(Dataset):
         print("filter class is" , self.filter_class)
         print("block size is" , self.block_size)
         print(f"Chunk shapes: {[d.shape for d in self.filtered_data_list]}")
-        
 
-        for l in label_list:
-            uniques , counts = np.unique(l,return_counts=True)
-            print(f"Unique values in chunk: {dict(zip(uniques,counts))}")
         if self.filter_class is not None:
             self.filtered_data_list = []
             for d, l in zip(data_list, label_list):
-                
+
                 filtered_d = []
                 for i in range(len(d)):
                     if l[i] == self.filter_class:
@@ -112,12 +103,9 @@ class ChatEMGDataset(Dataset):
                         if i + 1 == len(d) or l[i + 1] != self.filter_class:
                             self.filtered_data_list.append(np.array(filtered_d))
                             filtered_d = []
-
-
-        for l in label_list:
-            uniques , counts = np.unique(l,return_counts=True)
-            print(f"Unique values in chunk: {dict(zip(uniques,counts))}")
         print(f"Chunk shapes: {[d.shape for d in self.filtered_data_list]}")
+        print(f"Chunk : {[d.shape for d in self.filtered_data_list]}")
+
         # now I am removing chunks shorter than block size + 1, because we need to consider y as well
 
         self.filtered_data_list = [
@@ -188,23 +176,48 @@ class ChatEMGDataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = ChatEMGDataset(
-        csv_files=[
-"E:\projects\chatemgserver\chatemg\data\converted_accel_x.csv"
-        ],
-        filter_class=15,
-        block_size=256,
-        shift=True,
-        flip=True,
-        median_filter_size=9,
-        sensor_type="accel",
-        axis=["x"],
+    # Configuration matching sample.py
+    config = {
+        'converted_data_path': 'E:\\projects\\chatemgserver\\chatemg\\data',
+        'sensor_type': 'emg',
+        'participants_list_ids': ['p1', 'p3', 'p4', 'p7', 'p8'],
+        'filter_class': 15,
+        'token_len': 256,
+        'vocab_size': 128,
+        'ds_factor': 2,
+        'median_filter_size': 1,
+        'location': 'both'
+    }
+    
+    # Replicate dataset creation from sample.py
+    emg_data_paths = [
+        os.path.join(config['converted_data_path'], subject_id, "converted_emg.csv") 
+        for subject_id in config['participants_list_ids']
+    ]
+    
+    data_file_full_path = os.path.join(
+        config['converted_data_path'], 
+        f"merged_{config['sensor_type']}.csv"
     )
+    
+    sample_data_files = emg_data_paths if config['sensor_type'] == "emg" else [
+        data_file_full_path,
+    ]
+    
+    dataset = ChatEMGDataset(
+        csv_files=sample_data_files,
+        filter_class=config['filter_class'],
+        block_size=config['token_len'],
+        vocab_size=config['vocab_size'],
+        ds_factor=config['ds_factor'],
+        median_filter_size=config['median_filter_size'],
+        sensor_type=config['sensor_type'],
+        which_file="sample",
+        location=config['location']
+    )
+    
     print(f"num samples: {len(dataset)}")
     x, y = dataset[0]
     print(f"x shape: {x.shape}, y shape: {y.shape}")
-
-    print("here")
-    print(dataset)
-    print(len(dataset.filtered_data_list))
-    print(dataset.sample(1))
+    print(f"Number of chunks in filtered_data_list: {len(dataset.filtered_data_list)}")
+    print(f"Chunk shapes: {[d.shape for d in dataset.filtered_data_list]}")
