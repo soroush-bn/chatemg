@@ -27,7 +27,7 @@ class ChatEMGDataset(Dataset):
         which_file= "train",
         location= "both"
     ):
-        assert block_size < mu.SAMPLING_FREQ * mu.GESTURE_DURATION_SEC / ds_factor
+        # assert block_size < mu.SAMPLING_FREQ * mu.GESTURE_DURATION_SEC / ds_factor
         self.csv_files = csv_files
         self.filter_class = filter_class
         self.block_size = block_size
@@ -104,7 +104,7 @@ class ChatEMGDataset(Dataset):
                             self.filtered_data_list.append(np.array(filtered_d))
                             filtered_d = []
         print(f"Chunk shapes: {[d.shape for d in self.filtered_data_list]}")
-        print(f"Chunk : {[d.shape for d in self.filtered_data_list]}")
+
 
         # now I am removing chunks shorter than block size + 1, because we need to consider y as well
 
