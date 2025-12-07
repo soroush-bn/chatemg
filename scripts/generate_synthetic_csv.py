@@ -133,7 +133,7 @@ if __name__ == "__main__":
             cut_off = int((1 - masking_percentage) * rep.shape[0])
             prompt = rep[:cut_off, :]
             prompts_method1.append(prompt)
-            x= torch.tensor(prompt, device=device)
+            x= torch.tensor(prompt, device=device).unsqueeze(0)  # Add batch dimension: (samples, channels) -> (1, samples, channels)
             with torch.no_grad():
                 with ctx:
                     num_new_tokens = int(rep.shape[0] * masking_percentage)
@@ -145,7 +145,8 @@ if __name__ == "__main__":
                         prompt_size=config['prompt_size'],
                         independent=args.independent,
                     )
-                    Y = Y.cpu().numpy()
+                    # Extract only the generated tokens (not the prompt) and remove batch dimension
+                    Y = Y[0, -num_new_tokens:, :].cpu().numpy()  # (1, total_length, channels) -> (num_new_tokens, channels)
                     # append the generated part to the prompt to form the full rep
                     generated_rep = np.concatenate((prompt, Y), axis=0)
                     generated_reps_method1.append(generated_rep)
@@ -164,7 +165,7 @@ if __name__ == "__main__":
         rep3 =generate_dataset.get_not_one_rep(chunk, 3 )
         prompt=rep3
         prompts_method2.append(prompt)
-        x= torch.tensor(prompt, device=device)
+        x= torch.tensor(prompt, device=device).unsqueeze(0)  # Add batch dimension: (samples, channels) -> (1, samples, channels)
         with torch.no_grad():
             with ctx:
                 num_new_tokens = int(chunk.shape[0]-rep3.shape[0] )
@@ -176,7 +177,8 @@ if __name__ == "__main__":
                     prompt_size=config['prompt_size'],
                     independent=args.independent,
                 )
-                Y = Y.cpu().numpy()
+                # Extract only the generated tokens (not the prompt) and remove batch dimension
+                Y = Y[0, -num_new_tokens:, :].cpu().numpy()  # (1, total_length, channels) -> (num_new_tokens, channels)
                 # append the generated part to the prompt to form the full rep
                 generated_rep = np.concatenate((prompt, Y), axis=0)
                 generated_reps_method2.append(generated_rep)
