@@ -99,6 +99,7 @@ class ChatEMGDataset(Dataset):
         self.location = location
         self.vocab_size = vocab_size
         self.axis = axis
+        self.which_file = which_file
         data_list = []
         label_list = []
         print(type(median_filter_size))
