@@ -1,0 +1,27 @@
+#!/bin/bash
+
+set -euo pipefail
+# Load environment so "module" command works
+if [ -f /etc/profile.d/modules.sh ]; then
+    source /etc/profile.d/modules.sh
+fi
+module purge
+module load miniconda/pytorch-tensorflow-gpu-2024.09
+
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate buildrust
+
+python -m pip install --user tiktoken
+python -m pip install --user seaborn
+
+export PYTHONUNBUFFERED=1
+
+# Echo git branch and commit information
+echo "Git Branch: $(git rev-parse --abbrev-ref HEAD)"
+echo "Git Commit: $(git rev-parse HEAD)"
+echo "Git Commit (short): $(git rev-parse --short HEAD)"
+echo "Config argument: $CONFIG"
+
+# Run synthetic data generation
+python generate_synthetic_csv.py --config "$CONFIG" 
+
