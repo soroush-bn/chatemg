@@ -10,15 +10,6 @@ import matplotlib.font_manager
 from scipy.signal import resample_poly
 from scipy.signal import butter, filtfilt
 
-from_int_to_str = {0: "relax", 1: "open", 2: "close"}
-
-from_str_to_int = {"relax": 0, "open": 1, "close": 2}
-
-EMG_COLORS = ["b", "g", "r", "c", "m", "y", "k", "tab:brown"]
-SAMPLING_FREQ = 2000
-GESTURE_DURATION_SEC = 2
-NUMBER_OF_REPEATS = 4
-
 
 def plot_emg_chunks_parallel(
     real_data,

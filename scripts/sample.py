@@ -135,7 +135,8 @@ if __name__ == "__main__":
     emg_data_paths = [os.path.join(config['converted_data_path'], subject_id, f"converted_emg.csv") for subject_id in config['participants_list_ids']]
 
 # should be the converted one
-    sample_data_files = emg_data_paths if config['sensor_type'] == "emg" else [
+# emg_data_paths if config['sensor_type'] == "emg" else
+    sample_data_files =  [
     data_file_full_path,
 ]
     test_dataset = ChatEMGDataset(

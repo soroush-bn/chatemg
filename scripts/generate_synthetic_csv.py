@@ -66,8 +66,6 @@ if __name__ == "__main__":
     save_dir = os.path.join(model_files_base_directory, config['exp_name'])
 
     if init_from == "resume":
-        # init from a model saved in a specific directory
-        # Find the folder with the highest iteration number
         iter_folders = [f for f in os.listdir(save_dir) if f.startswith('iter_')]
         if not iter_folders:
             raise ValueError(f"No iteration folders found in {save_dir}")
@@ -104,7 +102,8 @@ if __name__ == "__main__":
     emg_data_paths = [os.path.join(config['converted_data_path'], subject_id, f"converted_emg.csv") for subject_id in config['participants_list_ids']]
 
     # should be the converted one
-    sample_data_files = emg_data_paths if config['sensor_type'] == "emg" else [
+    # emg_data_paths if config['sensor_type'] == "emg" else 
+    sample_data_files = [
         data_file_full_path,
     ]
     generate_dataset = ChatEMGDataset(
@@ -121,15 +120,13 @@ if __name__ == "__main__":
         location= config['location']
     )
 
-    #masking end of the repition of each gesture ( 10 % or more)
     all_chunks = generate_dataset.get_all_chunks()
     prompts_method1 = [] 
-    masking_percentage = 0.1  # mask last 10% of each rep
+    masking_percentage = 0.2  # mask last 10% of each rep
     generated_reps_method1 = []
     for chunk in all_chunks: 
         reps =generate_dataset.get_one_rep(chunk, None )
         for rep in reps:
-            # get first 90% of each rep, each rep is the shape of (samples, num_channels)
             cut_off = int((1 - masking_percentage) * rep.shape[0])
             prompt = rep[:cut_off, :]
             prompts_method1.append(prompt)
@@ -145,20 +142,15 @@ if __name__ == "__main__":
                         prompt_size=config['prompt_size'],
                         independent=args.independent,
                     )
-                    # Extract only the generated tokens (not the prompt) and remove batch dimension
                     Y = Y[0, -num_new_tokens:, :].cpu().numpy()  # (1, total_length, channels) -> (num_new_tokens, channels)
-                    # append the generated part to the prompt to form the full rep
                     generated_rep = np.concatenate((prompt, Y), axis=0)
                     generated_reps_method1.append(generated_rep)
-    #concatenate all generated reps and save them as synthetic csv data
     synthetic_x = np.concatenate(generated_reps_method1, axis=0)
-    #convert in to a df and save as csv
     save_path = os.path.join(save_dir, f"synthetic_data_{config['filter_class']}_{config['exp_name']}.csv")
     df= pd.DataFrame(synthetic_x, columns=[f"emg{i}" for i in range(synthetic_x.shape[1])])
     print("Method 1 (last 10% masking) - df.describe(): ", df.describe())
     df.to_csv(save_path, index=False)
     print(f"Saved method 1 synthetic data to: {save_path}")
-    # masking fourth repetition of the gesture
     generated_reps_method2 = []
     prompts_method2 = []
     for chunk in all_chunks: 
@@ -177,14 +169,10 @@ if __name__ == "__main__":
                     prompt_size=config['prompt_size'],
                     independent=args.independent,
                 )
-                # Extract only the generated tokens (not the prompt) and remove batch dimension
                 Y = Y[0, -num_new_tokens:, :].cpu().numpy()  # (1, total_length, channels) -> (num_new_tokens, channels)
-                # append the generated part to the prompt to form the full rep
                 generated_rep = np.concatenate((prompt, Y), axis=0)
                 generated_reps_method2.append(generated_rep)
-    # concatenate all generated reps and save them as synthetic csv data
     synthetic_x = np.concatenate(generated_reps_method2, axis=0)
-    #convert in to a df and save as csv
     save_path = os.path.join(save_dir, f"synthetic_data_lastrep_{config['filter_class']}_{config['exp_name']}.csv")
     df= pd.DataFrame(synthetic_x, columns=[f"emg{i}" for i in range(synthetic_x.shape[1])])
     print("Method 2 (fourth repetition masking) - df.describe(): ", df.describe())
@@ -192,6 +180,5 @@ if __name__ == "__main__":
     print(f"Saved method 2 synthetic data to: {save_path}")
 
 
-    # use real_x and Y to compute the mse error over the whole predicted trajectory. Both are numpy array
 
     print("done")

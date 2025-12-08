@@ -44,3 +44,5 @@ echo "Git Commit (short): $(git rev-parse --short HEAD)"
 
 
 python sample.py --config "$CONFIG"
+
+python generate_synthetic_csv.py --config "$CONFIG" 
