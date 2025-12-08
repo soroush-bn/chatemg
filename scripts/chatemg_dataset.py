@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from scipy.signal import medfilt
 from torch.utils.data import Dataset
-
+from consts import *
 import misc_utils as mu
 
 
@@ -263,10 +263,10 @@ class ChatEMGDataset(Dataset):
         if self.which_file == "generate":
             
             d =chunk
-            rep_length = len(d) // mu.NUMBER_OF_REPEATS
+            rep_length = len(d) // NUMBER_OF_REPEATS
             if which_rep ==None :
                 #return chunk devided to 4 repetitions
-                return [d[i*rep_length:(i+1)*rep_length] for i in range(mu.NUMBER_OF_REPEATS)]
+                return [d[i*rep_length:(i+1)*rep_length] for i in range(NUMBER_OF_REPEATS)]
             else:
                 start_idx = which_rep * rep_length
                 end_idx = start_idx + rep_length
@@ -276,7 +276,7 @@ class ChatEMGDataset(Dataset):
     def get_not_one_rep(self, chunk,which_rep=3):
         if self.which_file == "generate":
             d =chunk
-            rep_length = len(d) // mu.NUMBER_OF_REPEATS 
+            rep_length = len(d) // NUMBER_OF_REPEATS 
             start_idx = which_rep * rep_length
             end_idx = start_idx + rep_length
             return np.concatenate([d[:start_idx], d[end_idx:]], axis=0)
