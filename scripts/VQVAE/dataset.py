@@ -9,8 +9,6 @@ import torch
 with open("vqvae_config.yaml", "r") as file:
     config = yaml.safe_load(file)
 
-import torch
-
 class TorchStandardScaler:
     def __init__(self, eps=1e-8):
         self.mean = None
@@ -38,19 +36,9 @@ class EMGDataset(Dataset):
         "Pinky Extension":4,"Thumbs Up":5,"Right Angle":6,"Peace":7,"OK":8,"Horn":9,"Hang Loose":10,
         "Power Grip":11,"Hand Open":12,"Wrist Extension":13,"Wrist Flexion":14,"Ulnar deviation":15,"Radial Deviation":16    
     }   
-        raw_merged_data = self.__merge_subjects__()
-        print("subject merged data head 2:", raw_merged_data.head(2))
-
-        raw_merged_data = self.convert_raw_values(raw_merged_data, normalize=False)
-        print("--"*20)
-        print("subject merged data head 2 after conversion:", raw_merged_data.head(2))
-
-        emg_df = self.get_emg_df(raw_merged_data, saving_dir=self.saving_dir) 
-        print("--"*20)
-        print("emg df:", emg_df.head(2))
-
-        assert np.array_equal(np.sort(emg_df['gt'].unique()), np.arange(17, dtype=float)), "Unique values in 'gt' do not match expected range 0-16"
-        assert len(emg_df)==3537806, f"Dataframe length {len(emg_df)} does not match expected 3537806"
+        raw_merged_data = self.read_data()
+        assert np.array_equal(np.sort(raw_merged_data['gt'].unique()), np.arange(17, dtype=float)), "Unique values in 'gt' do not match expected range 0-16"
+        assert len(raw_merged_data)==3537806, f"Dataframe length {len(raw_merged_data)} does not match expected 3537806"
 
         emg_cols = [c for c in raw_merged_data.columns if 'emg' in c.lower()]
         data = raw_merged_data[emg_cols].values
@@ -79,7 +67,7 @@ class EMGDataset(Dataset):
         saving_csv_name = f"converted_{config['sensor_type']}_{config['axis']}.csv" if config['sensor_type'] != "emg" else "converted_emg.csv"
 
         for subject in config['participants_list_ids']:
-            subject_folder = os.path.join(config["raw_data_path"], subject)
+            subject_folder = os.path.join(config["converted_data_path"], subject)
             merged_df = pd.DataFrame()
 
             if type == "emg":
@@ -106,7 +94,7 @@ class EMGDataset(Dataset):
         print(f"Merged dataframe saved to {save_path}")
         return df
 
-    def convert_raw_values(self,df, normalize=True):
+    def convert_raw_values(self,df, normalize=False):
         for col in df.columns: 
             if "accel" in col : 
                 df[col] = df[col] /2048 # converting to g
@@ -209,3 +197,34 @@ class EMGDataset(Dataset):
         window = self.data[idx : idx + self.window_size]
         return window.transpose(0, 1)
 
+    def read_data(self):
+        
+        saving_csv_name = f"converted_{config['sensor_type']}_{config['axis']}.csv" if config['sensor_type'] != "emg" else "converted_emg.csv"
+
+        for participant_id in config['participants_list_ids']:
+            participant_folder = os.path.join(config["converted_data_path"], participant_id)
+            # check if already converted file exists 
+            if os.path.exists(os.path.join(participant_folder, saving_csv_name)):
+                print(f"Converted file already exists for participant: {participant_id}. Skipping conversion.")
+                continue
+            if os.path.exists(participant_folder):
+                pass
+            else:
+                os.makedirs(participant_folder, exist_ok=True)
+            print(f"Processing participant: {participant_id}")
+            csv_path1 = os.path.join(os.path.join(config["raw_data_path"], participant_id), config["df_raw_name"])
+            print(f"Reading data from: {csv_path1}")
+            df1 = pd.read_csv(csv_path1)
+            df1 = self.convert_raw_values(df1)
+            print(f"Converted raw values for participant: {participant_id}.")
+            if config['sensor_type'] == "emg":
+                emg_df = self.get_emg_df(df1,saving_dir=participant_folder)
+            else:
+                imu_df = self.get_IMU_df(df1, config['sensor_type'], config['axis'],saving_dir=participant_folder)
+                print(f"Converted {config['sensor_type']} data along {config['axis']} for participant: {participant_id}.")
+            print(f"Conversion completed for participant: {participant_id}.")
+
+        merged_df= self.__merge_subjects__(config['sensor_type'])
+        return merged_df
+#todo add merge function per person, for all participants.
+#todo adding df payin functionality
