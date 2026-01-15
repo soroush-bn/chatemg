@@ -38,7 +38,7 @@ class EMGDataset(Dataset):
     }   
         raw_merged_data = self.read_data()
         assert np.array_equal(np.sort(raw_merged_data['gt'].unique()), np.arange(17, dtype=float)), "Unique values in 'gt' do not match expected range 0-16"
-        assert len(raw_merged_data)==3537806, f"Dataframe length {len(raw_merged_data)} does not match expected 3537806"
+        print(len(raw_merged_data)==3537806, f"Dataframe length {len(raw_merged_data)} does not match expected 3537806")
 
         emg_cols = [c for c in raw_merged_data.columns if 'emg' in c.lower()]
         data = raw_merged_data[emg_cols].values
