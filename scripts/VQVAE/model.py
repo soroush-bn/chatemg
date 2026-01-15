@@ -1,5 +1,3 @@
-
-from zmq import device
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -269,14 +267,3 @@ class SDformerVQVAE(nn.Module):
         return x_recon, loss_embed, indices
 
 # Initialize Model
-
-
-if __name__=="__main__":
-    import yaml
-    with open('vqvae_config.yaml', 'r') as f:
-        CONFIG = yaml.safe_load(f)
-
-    model = SDformerVQVAE(CONFIG).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=CONFIG['learning_rate'])
-
-    print(model)
