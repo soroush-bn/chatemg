@@ -37,10 +37,18 @@ class EMGDataset(Dataset):
         "Thumb Extension":0,"index Extension":1,"Middle Extension":2,"Ring Extension":3,
         "Pinky Extension":4,"Thumbs Up":5,"Right Angle":6,"Peace":7,"OK":8,"Horn":9,"Hang Loose":10,
         "Power Grip":11,"Hand Open":12,"Wrist Extension":13,"Wrist Flexion":14,"Ulnar deviation":15,"Radial Deviation":16    
-    }
+    }   
         raw_merged_data = self.__merge_subjects__()
+        print("subject merged data head 2:", raw_merged_data.head(2))
+
         raw_merged_data = self.convert_raw_values(raw_merged_data, normalize=False)
+        print("--"*20)
+        print("subject merged data head 2 after conversion:", raw_merged_data.head(2))
+
         emg_df = self.get_emg_df(raw_merged_data, saving_dir=self.saving_dir) 
+        print("--"*20)
+        print("emg df:", emg_df.head(2))
+
         assert np.array_equal(np.sort(emg_df['gt'].unique()), np.arange(17, dtype=float)), "Unique values in 'gt' do not match expected range 0-16"
         assert len(emg_df)==3537806, f"Dataframe length {len(emg_df)} does not match expected 3537806"
 
@@ -58,7 +66,7 @@ class EMGDataset(Dataset):
 
         # Convert to tensor (float32)
         data = torch.tensor(data, dtype=torch.float32)
-
+        # in nabayad local baseh? per person ya per gesture? 
         self.scaler = TorchStandardScaler()
         self.data = self.scaler.fit_transform(data)
 
@@ -71,7 +79,7 @@ class EMGDataset(Dataset):
         saving_csv_name = f"converted_{config['sensor_type']}_{config['axis']}.csv" if config['sensor_type'] != "emg" else "converted_emg.csv"
 
         for subject in config['participants_list_ids']:
-            subject_folder = os.path.join(config["converted_data_path"], subject)
+            subject_folder = os.path.join(config["raw_data_path"], subject)
             merged_df = pd.DataFrame()
 
             if type == "emg":
@@ -86,6 +94,8 @@ class EMGDataset(Dataset):
                         df = pd.read_csv(csv_path)
                         merged_df = pd.concat([merged_df, df], axis=1)
             dfs.append(merged_df)
+        
+        print(len(dfs))
 
         df= pd.concat(dfs, axis=0)
         name_save = f'VQ_VAE_merged_{type}.csv'
