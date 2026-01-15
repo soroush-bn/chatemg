@@ -88,7 +88,7 @@ class EMGDataset(Dataset):
             dfs.append(merged_df)
 
         df= pd.concat(dfs, axis=0)
-        name_save = f'merged_{type}.csv'
+        name_save = f'VQ_VAE_merged_{type}.csv'
         save_path = os.path.join(config["converted_data_path"], name_save)
         df.to_csv(save_path, index=True)
         print(len(df))

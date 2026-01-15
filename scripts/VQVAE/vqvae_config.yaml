@@ -17,5 +17,5 @@ location : "forearm"
 
 raw_data_path : "/home/sbaghernezha/data/"
 df_raw_name : "final_df.csv"
-converted_data_path: "../data/"
+converted_data_path: "/home/sbaghernezha/projects/chatemg/chatemg/data/"
 
