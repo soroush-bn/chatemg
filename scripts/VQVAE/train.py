@@ -1,6 +1,6 @@
 from tqdm import tqdm
 import torch.nn as nn
-import torch.Functional as F
+import torch.nn.functional as F
 
 def train_vqvae(model, dataloader,device,optimizer,config):
     model.train()
