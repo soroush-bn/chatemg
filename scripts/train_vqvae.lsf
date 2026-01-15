@@ -10,10 +10,7 @@ module load miniconda/pytorch-tensorflow-gpu-2024.09
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
-#python -m pip install --user tiktoken
-#python -m pip install --user seaborn
-#python -m pip install --user wandb==0.15.11
-#export WANDB_API_KEY=$(cat ~/.wandb_key)
+python -m pip install --user scikit-learn
 
 
 export PYTHONUNBUFFERED=1

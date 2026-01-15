@@ -44,6 +44,6 @@ def train_vqvae(model, dataloader,device,optimizer,config):
 
         # Print summary ONLY at the end of the epoch
         # tqdm.write ensures it prints nicely above the progress bar
-        tqdm.write(f"Epoch [{epoch+1}/{epochs}] | Loss: {avg_loss:.4f} | Recon: {avg_recon:.4f} | Embed: {avg_embed:.4f}")
+        tqdm.write(f"Epoch [{epoch+1}/{config['number_of_epochs']}] | Loss: {avg_loss:.4f} | Recon: {avg_recon:.4f} | Embed: {avg_embed:.4f}")
     return model
 # Run Training
