@@ -22,7 +22,6 @@ export PYTHONUNBUFFERED=1
 echo "Git Branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "Git Commit: $(git rev-parse HEAD)"
 echo "Git Commit (short): $(git rev-parse --short HEAD)"
-echo "Config argument: $CONFIG"
 
 # Get number of GPUs available
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
