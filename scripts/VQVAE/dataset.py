@@ -1,7 +1,6 @@
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 import yaml 
 import os 
 import torch
@@ -10,6 +9,25 @@ import torch
 with open("vqvae_config.yaml", "r") as file:
     config = yaml.safe_load(file)
 
+import torch
+
+class TorchStandardScaler:
+    def __init__(self, eps=1e-8):
+        self.mean = None
+        self.std = None
+        self.eps = eps
+
+    def fit(self, x):
+        self.mean = x.mean(dim=0, keepdim=True)
+        self.std = x.std(dim=0, keepdim=True, unbiased=False)
+        return self
+
+    def transform(self, x):
+        return (x - self.mean) / (self.std + self.eps)
+
+    def fit_transform(self, x):
+        self.fit(x)
+        return self.transform(x)
 
 class EMGDataset(Dataset):
     def __init__(self, window_size=96):
@@ -35,11 +53,14 @@ class EMGDataset(Dataset):
         data = df_temp.values
 
         # 3. Normalize (Zero mean, Unit Variance)
-        self.scaler = StandardScaler()
-        self.data = self.scaler.fit_transform(data)
+        # self.scaler = StandardScaler()
+        # self.data = self.scaler.fit_transform(data)
 
         # Convert to tensor (float32)
-        self.data = torch.tensor(self.data, dtype=torch.float32)
+        data = torch.tensor(data, dtype=torch.float32)
+
+        self.scaler = TorchStandardScaler()
+        self.data = self.scaler.fit_transform(data)
 
     def __len__(self):
         return len(self.data) - self.window_size + 1

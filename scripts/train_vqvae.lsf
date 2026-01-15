@@ -10,7 +10,6 @@ module load miniconda/pytorch-tensorflow-gpu-2024.09
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
-python -m pip install --user scikit-learn
 
 
 export PYTHONUNBUFFERED=1
