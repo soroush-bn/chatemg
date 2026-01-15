@@ -38,7 +38,7 @@ class EMGDataset(Dataset):
         "Pinky Extension":4,"Thumbs Up":5,"Right Angle":6,"Peace":7,"OK":8,"Horn":9,"Hang Loose":10,
         "Power Grip":11,"Hand Open":12,"Wrist Extension":13,"Wrist Flexion":14,"Ulnar deviation":15,"Radial Deviation":16    
     }
-        raw_merged_data = self.__merge_subjects__(type="emg")
+        raw_merged_data = self.__merge_subjects__()
         raw_merged_data = self.convert_raw_values(raw_merged_data, normalize=False)
         emg_df = self.get_emg_df(raw_merged_data, saving_dir=self.saving_dir) 
         assert np.array_equal(np.sort(emg_df['gt'].unique()), np.arange(17, dtype=float)), "Unique values in 'gt' do not match expected range 0-16"
@@ -66,7 +66,7 @@ class EMGDataset(Dataset):
         return len(self.data) - self.window_size + 1
 
 
-    def __merge_subjects__(type="emg"):
+    def __merge_subjects__(self, type="emg"):
         dfs = []
         saving_csv_name = f"converted_{config['sensor_type']}_{config['axis']}.csv" if config['sensor_type'] != "emg" else "converted_emg.csv"
 
