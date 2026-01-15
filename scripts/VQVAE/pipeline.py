@@ -30,7 +30,8 @@ assert next(iter(dataloader)).shape == (config['batch_size'], 8, config['window_
 # create model 
 
 model = SDformerVQVAE(config).to(device)
-optimizer = torch.optim.AdamW(model.parameters(), lr=config['learning_rate'])
+learning_rate = float(config['learning_rate'])
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
 print(model)
 # train model 
