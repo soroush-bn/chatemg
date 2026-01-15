@@ -2,6 +2,7 @@ number_of_epochs: 2
 input_dim: 8         
 hidden_dim: 512    
 codebook_size: 512
+code_dim: 512
 window_size: 300      
 lambda_loss: 0.01     
 batch_size: 64
