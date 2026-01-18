@@ -47,3 +47,5 @@ print(f"Model saved to ./models/{config['name']}.pth")
 #evaluate model 
 
 evaluate_model(model, dataloader, device,config )
+
+print("Evaluation completed.")
