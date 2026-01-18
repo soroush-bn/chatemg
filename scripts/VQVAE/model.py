@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-
 class SimilarityDrivenVectorQuantizer(nn.Module):
     def __init__(self, num_embeddings, embedding_dim, decay=0.99, epsilon=1e-5):
         super().__init__()
@@ -11,102 +10,94 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
         self.embedding_dim = embedding_dim
         self.decay = decay
         self.epsilon = epsilon
-
-        # Initialize embeddings
+        
+        # Initialize embeddings uniformly
         embedding = torch.randn(num_embeddings, embedding_dim)
-        # We assume unit norm for the codebook as per Eq (3) and (4) implication [cite: 118, 119]
         self.register_buffer('embedding', embedding / embedding.norm(dim=1, keepdim=True))
-
-        # EMA Buffers (for training stability) [cite: 35]
+        
         self.register_buffer('ema_cluster_size', torch.zeros(num_embeddings))
         self.register_buffer('ema_w', torch.randn(num_embeddings, embedding_dim))
+        
+        # Flag to track if we have initialized with real data yet
+        self.init = False 
+
+    def init_codebook(self, flat_input):
+        """Initialize codebook using random selection from the first batch of data"""
+        print("Initializing codebook with K-means++ strategy (random data selection)...")
+        # Select K random vectors from the input batch to be the starting codebook
+        # This ensures the codes start ON the data manifold, not in random space
+        indices = torch.randperm(flat_input.size(0))[:self.num_embeddings]
+        
+        # If batch is smaller than codebook, we repeat
+        if len(indices) < self.num_embeddings:
+            indices = indices.repeat((self.num_embeddings // len(indices)) + 1)[:self.num_embeddings]
+            
+        initial_codes = flat_input[indices]
+        self.embedding.data.copy_(F.normalize(initial_codes, p=2, dim=1))
+        self.ema_w.data.copy_(self.embedding.data * self.decay) # Sync EMA
+        self.init = True
 
     def forward(self, inputs):
-        # inputs shape: [Batch, Channels, Length]
-        # Channels corresponds to 'd_c' (embedding_dim) in the paper [cite: 110]
-        input_shape = inputs.shape
-        # print("input shape is:", inputs.shape)
-        # 1. Permute to move embedding dim to the end
+        # ... [Previous pre-processing code] ...
         inputs = inputs.permute(0, 2, 1).contiguous()
-        assert inputs.shape == (input_shape[0], input_shape[2], input_shape[1]), \
-            f"Expected permuted shape {(input_shape[0], input_shape[2], input_shape[1])}, got {inputs.shape}"
-        # print("input shape after permutation is:", inputs.shape)
-
-        # 2. Flatten input: [Batch * Length, Embedding_Dim]
+        input_shape = inputs.shape
         flat_input = inputs.view(-1, self.embedding_dim)
-        assert flat_input.shape == (input_shape[0] * input_shape[2], self.embedding_dim), \
-            f"Expected flat shape {(input_shape[0] * input_shape[2], self.embedding_dim)}, got {flat_input.shape}"
-        # print("input shape after flattening  is:", inputs.shape)
-
-        # --- Normalization (Eq 3) ---
-        # "result in a unit modulus length for h_i" [cite: 118]
+        
+        # NORMALIZE INPUT
         flat_input_norm = F.normalize(flat_input, p=2, dim=1)
-        assert flat_input_norm.shape == flat_input.shape
-
-        # --- Similarity Calculation (Eq 4) ---
-        # "arg max h_i . c_k" (Dot product of normalized vectors) [cite: 120]
-        # (B*L, D) @ (K, D).T -> (B*L, K)
+        
+        # --- 1. DATA-DEPENDENT INITIALIZATION (Crucial Fix) ---
+        if self.training and not self.init:
+            self.init_codebook(flat_input_norm)
+            
+        # --- Similarity Calculation ---
         distances = torch.matmul(flat_input_norm, self.embedding.t())
-        assert distances.shape == (flat_input.shape[0], self.num_embeddings), \
-            f"Expected distances shape {(flat_input.shape[0], self.num_embeddings)}, got {distances.shape}"
-
+        
         # --- Quantization ---
-        # Find index of max similarity [cite: 115]
         encoding_indices = torch.argmax(distances, dim=1)
-        assert encoding_indices.shape == (flat_input.shape[0],), \
-            f"Expected indices shape {(flat_input.shape[0],)}, got {encoding_indices.shape}"
-        # print("encoding indices: ",encoding_indices)
-        # Create one-hot encodings
         encodings = F.one_hot(encoding_indices, self.num_embeddings).float()
-        assert encodings.shape == (flat_input.shape[0], self.num_embeddings)
-        # print("encoding shape:",encodings.shape)
-        # Quantize: Select the codebook vectors
         quantized = torch.matmul(encodings, self.embedding)
-        assert quantized.shape == flat_input.shape
-        # print("quantized shape:",quantized.shape)
-
-        # Reshape back to original dimensions [Batch, Length, Channels]
-        quantized = quantized.view(input_shape[0], input_shape[2], input_shape[1])
-
-        # --- EMA Update (Training Only) ---
-        # Updating codebook without backprop
+        quantized = quantized.view(input_shape)
+        
+        # --- EMA Update with Dead Code Revival ---
         if self.training:
-            # Usage of each code in this batch
             cluster_size = encodings.sum(0)
-            # Sum of input vectors assigned to each code
             updated_ema_w = torch.matmul(encodings.t(), flat_input_norm)
-
-            # Update buffers
+            
             self.ema_cluster_size.data.mul_(self.decay).add_(cluster_size, alpha=1 - self.decay)
             self.ema_w.data.mul_(self.decay).add_(updated_ema_w, alpha=1 - self.decay)
-
-            # Laplace smoothing
+            
+            # --- CODE RESET (The Paper's Fix) ---
+            # Identify codes that have very low usage (< 1.0 means used less than once on average)
+            # We re-initialize them to random encoder outputs from the current batch
+            dead_codes = self.ema_cluster_size < 1.0
+            if dead_codes.any():
+                # Pick random inputs to replace dead codes
+                num_dead = dead_codes.sum()
+                # Select random inputs
+                rand_indices = torch.randint(0, flat_input_norm.size(0), (num_dead,))
+                new_codes = flat_input_norm[rand_indices]
+                
+                # Reset weights and cluster size for these codes
+                self.embedding.data[dead_codes] = new_codes
+                self.ema_w.data[dead_codes] = new_codes
+                self.ema_cluster_size.data[dead_codes] = 1.0 # Give them a 'fresh start' count
+            
+            # Normal EMA normalization
             n = self.ema_cluster_size.sum()
             cluster_size_smoothed = (
-                (self.ema_cluster_size + self.epsilon) /
+                (self.ema_cluster_size + self.epsilon) / 
                 (n + self.num_embeddings * self.epsilon) * n
             )
-
-            # Normalize updated codebook [cite: 119]
             normalised_ema_w = self.ema_w / cluster_size_smoothed.unsqueeze(1)
             self.embedding.data.copy_(F.normalize(normalised_ema_w, p=2, dim=1))
 
-        # --- Commitment Loss (Eq 6) ---
-        # Loss = 1 - similarity [cite: 129]
-        # Since vectors are normalized, similarity is just the dot product.
-        # We detach quantized to stop gradient flow to the codebook (it's updated via EMA)
+        # ... [Rest of forward pass] ...
         similarity = (flat_input_norm * quantized.view(-1, self.embedding_dim).detach()).sum(dim=1)
         commitment_loss = (1 - similarity).mean()
-
-        # Straight Through Estimator [cite: 131]
-        # Pass gradients from 'quantized' directly to 'inputs'
+        
         quantized = inputs + (quantized - inputs).detach()
-
-        # Permute back to [Batch, Channels, Length]
-        result = quantized.permute(0, 2, 1)
-        assert result.shape == input_shape, f"Final shape mismatch. Expected {input_shape}, got {result.shape}"
-
-        return result, commitment_loss, encoding_indices
+        return quantized.permute(0, 2, 1), commitment_loss, encoding_indices
     
 
 
