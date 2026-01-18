@@ -1,5 +1,5 @@
-name: "test_run_1_epoch"
-number_of_epochs: 1
+name: "test_run_100_epoch"
+number_of_epochs: 100
 input_dim: 8         
 hidden_dim: 512    
 codebook_size: 1024
