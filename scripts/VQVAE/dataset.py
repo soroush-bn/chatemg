@@ -40,6 +40,8 @@ class EMGDataset(Dataset):
         "Power Grip":11,"Hand Open":12,"Wrist Extension":13,"Wrist Flexion":14,"Ulnar deviation":15,"Radial Deviation":16    
     }   
         self.id_to_label = {v: k for k, v in self.label_mapping.items()}
+        self.scaler = TorchStandardScaler()
+
         raw_merged_data = self.read_data()
         assert np.array_equal(np.sort(raw_merged_data['gt'].unique()), np.arange(17, dtype=float)), "Unique values in 'gt' do not match expected range 0-16"
         print(len(raw_merged_data)==3537806, f"Dataframe length {len(raw_merged_data)} does not match expected 3537806")
@@ -59,8 +61,7 @@ class EMGDataset(Dataset):
         # Convert to tensor (float32)
         data = torch.tensor(data, dtype=torch.float32)
         # in nabayad local baseh? per person ya per gesture? 
-        self.scaler = TorchStandardScaler()
-        self.data = self.scaler.fit_transform(data)
+        # self.data = self.scaler.fit_transform(data)
 
     def __len__(self):
         max_start = len(self.data) - self.window_size
@@ -233,6 +234,8 @@ class EMGDataset(Dataset):
             print(f"Reading data from: {csv_path1}")
             df1 = pd.read_csv(csv_path1)
             df1 = self.convert_raw_values(df1)
+            df1 = self._apply_standard_scaler(df1)
+            
             print(f"Converted raw values for participant: {participant_id}.")
             if config['sensor_type'] == "emg":
                 emg_df = self.get_emg_df(df1,saving_dir=participant_folder)
@@ -244,6 +247,20 @@ class EMGDataset(Dataset):
         merged_df= self.__merge_subjects__(config['sensor_type'])
         return merged_df
     
+    def _apply_standard_scaler(self, df):
+        """Apply zero-mean/unit-variance scaling to numeric sensor channels."""
+        sensor_cols = [
+            col for col in df.columns
+            if pd.api.types.is_numeric_dtype(df[col]) and any(keyword in col.lower() for keyword in ("emg", "sensor", "accel", "gyro", "mag"))
+        ]
+        if not sensor_cols:
+            return df
+
+        tensor_data = torch.tensor(df[sensor_cols].values, dtype=torch.float32)
+        scaled = self.scaler.fit_transform(tensor_data)
+        df[sensor_cols] = scaled.numpy()
+        return df
+
 
     def _print_subject_distribution(self, subject_id, df):
         if 'gt' not in df.columns:
