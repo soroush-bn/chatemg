@@ -28,14 +28,18 @@ class TorchStandardScaler:
         return self.transform(x)
 
 class EMGDataset(Dataset):
-    def __init__(self, window_size=96):
+    def __init__(self, window_size=300, stride=1):
+        if stride < 1:
+            raise ValueError("stride must be >= 1")
         self.window_size = window_size
+        self.stride = stride
         self.saving_dir = "./"  
         self.label_mapping = {
         "Thumb Extension":0,"index Extension":1,"Middle Extension":2,"Ring Extension":3,
         "Pinky Extension":4,"Thumbs Up":5,"Right Angle":6,"Peace":7,"OK":8,"Horn":9,"Hang Loose":10,
         "Power Grip":11,"Hand Open":12,"Wrist Extension":13,"Wrist Flexion":14,"Ulnar deviation":15,"Radial Deviation":16    
     }   
+        self.id_to_label = {v: k for k, v in self.label_mapping.items()}
         raw_merged_data = self.read_data()
         assert np.array_equal(np.sort(raw_merged_data['gt'].unique()), np.arange(17, dtype=float)), "Unique values in 'gt' do not match expected range 0-16"
         print(len(raw_merged_data)==3537806, f"Dataframe length {len(raw_merged_data)} does not match expected 3537806")
@@ -59,8 +63,17 @@ class EMGDataset(Dataset):
         self.data = self.scaler.fit_transform(data)
 
     def __len__(self):
-        return len(self.data) - self.window_size + 1
+        max_start = len(self.data) - self.window_size
+        if max_start < 0:
+            return 0
+        return max_start // self.stride + 1
 
+    def __getitem__(self, idx):
+        # Shape: [Window_Size, Channels] -> Transpose to [Channels, Window_Size] for Conv1D
+        start = idx * self.stride
+        window = self.data[start : start + self.window_size]
+        return window.transpose(0, 1)
+    
 
     def __merge_subjects__(self, type="emg"):
         dfs = []
@@ -69,17 +82,22 @@ class EMGDataset(Dataset):
         for subject in config['participants_list_ids']:
             subject_folder = os.path.join(config["converted_data_path"], subject)
             merged_df = pd.DataFrame()
+            printed_subject = False
 
             if type == "emg":
                 csv_path = os.path.join(subject_folder, saving_csv_name)
                 if os.path.exists(csv_path):
                     df = pd.read_csv(csv_path)
+                    self._print_subject_distribution(subject, df)
                     merged_df = pd.concat([merged_df, df], axis=1)
             else:
                 for ax in config['axis']:
                     csv_path = os.path.join(subject_folder, f"converted_{config['sensor_type']}_{ax}.csv")
                     if os.path.exists(csv_path):
                         df = pd.read_csv(csv_path)
+                        if not printed_subject:
+                            self._print_subject_distribution(subject, df)
+                            printed_subject = True
                         merged_df = pd.concat([merged_df, df], axis=1)
             dfs.append(merged_df)
         
@@ -91,7 +109,9 @@ class EMGDataset(Dataset):
         df.to_csv(save_path, index=True)
         print(len(df))
         print(df.head())
+        print(df.describe())
         print(f"Merged dataframe saved to {save_path}")
+        print("--"*20)
         return df
 
     def convert_raw_values(self,df, normalize=False):
@@ -133,7 +153,7 @@ class EMGDataset(Dataset):
             new_df[f'emg{i}'] = df[f'emg{i}'].fillna(0)
 
         # Set labels as 'gt' with numeric mapping
-        new_df['gt'] = df['label'].map(self.label_mapping).astype('int64')
+        new_df['gt'] = df['label'].map(self.label_mapping)
 
         # Print unique labels to debug
         print("\nUnique labels in the data:")
@@ -175,7 +195,7 @@ class EMGDataset(Dataset):
             new_df[f'sensor{i}_{type}_{axis}'] = df[col].fillna(0).astype('float64')
 
         # Set labels as 'gt' with numeric mapping
-        new_df['gt'] = df['label'].map(self.label_mapping).astype('int64')
+        new_df['gt'] = df['label'].map(self.label_mapping)
 
         # Print unique labels to debug
         print("\nUnique labels in the data:")
@@ -192,10 +212,7 @@ class EMGDataset(Dataset):
         return new_df
 
 
-    def __getitem__(self, idx):
-        # Shape: [Window_Size, Channels] -> Transpose to [Channels, Window_Size] for Conv1D
-        window = self.data[idx : idx + self.window_size]
-        return window.transpose(0, 1)
+
 
     def read_data(self):
         
@@ -226,5 +243,28 @@ class EMGDataset(Dataset):
 
         merged_df= self.__merge_subjects__(config['sensor_type'])
         return merged_df
+    
+
+    def _print_subject_distribution(self, subject_id, df):
+        if 'gt' not in df.columns:
+            print(f"Subject {subject_id}: no 'gt' column found, skipping gesture summary.")
+            return
+
+        counts = df['gt'].dropna().astype(int).value_counts().sort_index()
+        if counts.empty:
+            print(f"Subject {subject_id}: no labeled samples found.")
+            return
+
+        print(f"\nSubject {subject_id} gesture breakdown:")
+        for gesture_id, sample_count in counts.items():
+            label = self.id_to_label.get(gesture_id, f"Unknown({gesture_id})")
+            approx_windows = 0
+            if sample_count >= self.window_size:
+                approx_windows = (sample_count - self.window_size) // self.stride + 1
+            print(f"    {sample_count:,} samples (~{approx_windows:,} windows) - {label}")
+
+    def display_data_structure(self):
+        pass
+
 #todo add merge function per person, for all participants.
 #todo adding df payin functionality

@@ -1,9 +1,10 @@
-number_of_epochs: 2
+number_of_epochs: 1
 input_dim: 8         
 hidden_dim: 512    
-codebook_size: 512
-code_dim: 512
-window_size: 300      
+codebook_size: 1024
+code_dim: 64
+window_size: 300    
+stride : 150  
 lambda_loss: 0.01     
 batch_size: 64
 learning_rate: 1e-4

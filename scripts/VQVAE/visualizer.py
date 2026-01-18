@@ -1,9 +1,8 @@
-
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd 
 
-
-def plot_gesture_emg(num_timesteps, class_label, subject_number, dataframe=df_converted_emg):
+def plot_gesture_emg(num_timesteps, class_label, subject_number, dataframe):
     """
     Visualizes EMG data for a specific gesture, subject (identified by index offset), and number of time steps.
 
