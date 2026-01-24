@@ -59,7 +59,7 @@ class EMGDataset(Dataset):
         # self.data = self.scaler.fit_transform(data)
 
         # Convert to tensor (float32)
-        data = torch.tensor(data, dtype=torch.float32)
+        self.data = torch.tensor(data, dtype=torch.float32)
         # in nabayad local baseh? per person ya per gesture? 
         # self.data = self.scaler.fit_transform(data)
 
