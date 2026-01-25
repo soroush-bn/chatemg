@@ -92,12 +92,20 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
             normalised_ema_w = self.ema_w / cluster_size_smoothed.unsqueeze(1)
             self.embedding.data.copy_(F.normalize(normalised_ema_w, p=2, dim=1))
 
-        # ... [Rest of forward pass] ...
-        similarity = (flat_input_norm * quantized.view(-1, self.embedding_dim).detach()).sum(dim=1)
-        commitment_loss = (1 - similarity).mean()
+        # --- COMMITMENT LOSS (Standard VQ-VAE Loss) ---
+        # This loss penalizes the encoder for not committing to the quantized codes
+        # Equation: ||z_e(x) - sg[e]||^2 where sg = stop gradient
+        commitment_loss = F.mse_loss(flat_input_norm, self.embedding[encoding_indices].detach())
+        
+        # --- CODEBOOK LOSS (encourages embeddings to track encoder outputs) ---
+        # Equation: ||sg[z_e(x)] - e||^2
+        codebook_loss = F.mse_loss(self.embedding[encoding_indices], flat_input_norm.detach())
+        
+        # Combine losses
+        embedding_loss = commitment_loss + 0.25 * codebook_loss
         
         quantized = inputs + (quantized - inputs).detach()
-        return quantized.permute(0, 2, 1), commitment_loss, encoding_indices
+        return quantized.permute(0, 2, 1), embedding_loss, encoding_indices
     
 
 
