@@ -15,13 +15,18 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
         embedding = torch.randn(num_embeddings, embedding_dim)
         self.register_buffer('embedding', embedding / embedding.norm(dim=1, keepdim=True))
         
+        # ALSO store unnormalized embeddings for loss computation
+        # This allows MSE loss to have meaningful gradients
+        self.register_buffer('embedding_unnormalized', embedding.clone())
+        
         self.register_buffer('ema_cluster_size', torch.zeros(num_embeddings))
         self.register_buffer('ema_w', torch.randn(num_embeddings, embedding_dim))
+        self.register_buffer('ema_w_unnormalized', torch.randn(num_embeddings, embedding_dim))
         
         # Flag to track if we have initialized with real data yet
         self.init = False 
 
-    def init_codebook(self, flat_input):
+    def init_codebook(self, flat_input, flat_input_unnormalized):
         """Initialize codebook using random selection from the first batch of data"""
         print("Initializing codebook with K-means++ strategy (random data selection)...")
         # Select K random vectors from the input batch to be the starting codebook
@@ -33,8 +38,11 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
             indices = indices.repeat((self.num_embeddings // len(indices)) + 1)[:self.num_embeddings]
             
         initial_codes = flat_input[indices]
+        initial_codes_unnormalized = flat_input_unnormalized[indices]
         self.embedding.data.copy_(F.normalize(initial_codes, p=2, dim=1))
-        self.ema_w.data.copy_(self.embedding.data * self.decay) # Sync EMA
+        self.embedding_unnormalized.data.copy_(initial_codes_unnormalized)
+        self.ema_w.data.copy_(self.embedding.data * self.decay)  # Sync EMA
+        self.ema_w_unnormalized.data.copy_(self.embedding_unnormalized.data * self.decay)
         self.init = True
 
     def forward(self, inputs):
@@ -43,14 +51,17 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
         input_shape = inputs.shape
         flat_input = inputs.view(-1, self.embedding_dim)
         
-        # NORMALIZE INPUT
+        # Store unnormalized input for loss computation
+        flat_input_unnormalized = flat_input.clone()
+        
+        # NORMALIZE INPUT for similarity computation
         flat_input_norm = F.normalize(flat_input, p=2, dim=1)
         
         # --- 1. DATA-DEPENDENT INITIALIZATION (Crucial Fix) ---
         if self.training and not self.init:
-            self.init_codebook(flat_input_norm)
+            self.init_codebook(flat_input_norm, flat_input_unnormalized)
             
-        # --- Similarity Calculation ---
+        # --- Similarity Calculation (on normalized vectors) ---
         distances = torch.matmul(flat_input_norm, self.embedding.t())
         
         # --- Quantization ---
@@ -63,9 +74,11 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
         if self.training:
             cluster_size = encodings.sum(0)
             updated_ema_w = torch.matmul(encodings.t(), flat_input_norm)
+            updated_ema_w_unnormalized = torch.matmul(encodings.t(), flat_input_unnormalized)
             
             self.ema_cluster_size.data.mul_(self.decay).add_(cluster_size, alpha=1 - self.decay)
             self.ema_w.data.mul_(self.decay).add_(updated_ema_w, alpha=1 - self.decay)
+            self.ema_w_unnormalized.data.mul_(self.decay).add_(updated_ema_w_unnormalized, alpha=1 - self.decay)
             
             # --- CODE RESET (The Paper's Fix) ---
             # Identify codes that have very low usage (< 1.0 means used less than once on average)
@@ -77,11 +90,14 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
                 # Select random inputs
                 rand_indices = torch.randint(0, flat_input_norm.size(0), (num_dead,))
                 new_codes = flat_input_norm[rand_indices]
+                new_codes_unnormalized = flat_input_unnormalized[rand_indices]
                 
                 # Reset weights and cluster size for these codes
                 self.embedding.data[dead_codes] = new_codes
+                self.embedding_unnormalized.data[dead_codes] = new_codes_unnormalized
                 self.ema_w.data[dead_codes] = new_codes
-                self.ema_cluster_size.data[dead_codes] = 1.0 # Give them a 'fresh start' count
+                self.ema_w_unnormalized.data[dead_codes] = new_codes_unnormalized
+                self.ema_cluster_size.data[dead_codes] = 1.0  # Give them a 'fresh start' count
             
             # Normal EMA normalization
             n = self.ema_cluster_size.sum()
@@ -91,15 +107,17 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
             )
             normalised_ema_w = self.ema_w / cluster_size_smoothed.unsqueeze(1)
             self.embedding.data.copy_(F.normalize(normalised_ema_w, p=2, dim=1))
+            # Keep unnormalized version in sync for loss computation
+            self.embedding_unnormalized.data.copy_(self.ema_w_unnormalized / cluster_size_smoothed.unsqueeze(1))
 
-        # --- COMMITMENT LOSS (Standard VQ-VAE Loss) ---
+        # --- COMMITMENT LOSS (on UNNORMALIZED vectors for proper gradients) ---
         # This loss penalizes the encoder for not committing to the quantized codes
         # Equation: ||z_e(x) - sg[e]||^2 where sg = stop gradient
-        commitment_loss = F.mse_loss(flat_input_norm, self.embedding[encoding_indices].detach())
+        commitment_loss = F.mse_loss(flat_input_unnormalized, self.embedding_unnormalized[encoding_indices].detach())
         
         # --- CODEBOOK LOSS (encourages embeddings to track encoder outputs) ---
         # Equation: ||sg[z_e(x)] - e||^2
-        codebook_loss = F.mse_loss(self.embedding[encoding_indices], flat_input_norm.detach())
+        codebook_loss = F.mse_loss(self.embedding_unnormalized[encoding_indices], flat_input_unnormalized.detach())
         
         # Combine losses
         embedding_loss = commitment_loss + 0.25 * codebook_loss

@@ -1,4 +1,4 @@
-name: "test_run3_50_epoch"
+name: "test_run4_50_epoch"
 number_of_epochs: 50
 input_dim: 8         
 hidden_dim: 512    
