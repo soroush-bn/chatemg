@@ -11,6 +11,8 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
 
 python -m pip install --user tqdm
+python -m pip install --user PyYAML
+
 
 # Debug: verify environment
 echo "Python executable: $(which python)"
