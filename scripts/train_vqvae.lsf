@@ -12,6 +12,8 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
 python -m pip install --user tqdm
 conda install -y scikit-learn
+conda install -y pyyaml
+python -c "import sklearn; print(f'scikit-learn version: {sklearn.__version__}')"
 
 export PYTHONUNBUFFERED=1
 
