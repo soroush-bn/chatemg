@@ -15,9 +15,8 @@ conda info --base
 conda list
 pip freeze 
 python -m pip install --user tqdm
-python -c "import sklearn; print(f'scikit-learn version: {sklearn.__version__}')"
-
 conda info --base
+
 export PYTHONUNBUFFERED=1
 
 # Echo git branch and commit information
