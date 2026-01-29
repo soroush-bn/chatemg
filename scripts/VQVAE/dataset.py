@@ -4,28 +4,11 @@ import pandas as pd
 import yaml 
 import os 
 import torch
+from sklearn.preprocessing import StandardScaler
 
 
 with open("vqvae_config.yaml", "r") as file:
     config = yaml.safe_load(file)
-
-class TorchStandardScaler:
-    def __init__(self, eps=1e-8):
-        self.mean = None
-        self.std = None
-        self.eps = eps
-
-    def fit(self, x):
-        self.mean = x.mean(dim=0, keepdim=True)
-        self.std = x.std(dim=0, keepdim=True, unbiased=False)
-        return self
-
-    def transform(self, x):
-        return (x - self.mean) / (self.std + self.eps)
-
-    def fit_transform(self, x):
-        self.fit(x)
-        return self.transform(x)
 
 class EMGDataset(Dataset):
     def __init__(self, window_size=300, stride=1):
@@ -40,7 +23,7 @@ class EMGDataset(Dataset):
         "Power Grip":11,"Hand Open":12,"Wrist Extension":13,"Wrist Flexion":14,"Ulnar deviation":15,"Radial Deviation":16    
     }   
         self.id_to_label = {v: k for k, v in self.label_mapping.items()}
-        self.scaler = TorchStandardScaler()
+        self.scaler = StandardScaler()
 
         raw_merged_data = self.read_data()
         assert np.array_equal(np.sort(raw_merged_data['gt'].unique()), np.arange(17, dtype=float)), "Unique values in 'gt' do not match expected range 0-16"
@@ -216,51 +199,62 @@ class EMGDataset(Dataset):
 
 
     def read_data(self):
-        
         saving_csv_name = f"converted_{config['sensor_type']}_{config['axis']}.csv" if config['sensor_type'] != "emg" else "converted_emg.csv"
 
         for participant_id in config['participants_list_ids']:
             participant_folder = os.path.join(config["converted_data_path"], participant_id)
-            # check if already converted file exists 
+            os.makedirs(participant_folder, exist_ok=True) # Ensure folder exists
             if os.path.exists(os.path.join(participant_folder, saving_csv_name)):
-                print(f"Converted file already exists for participant: {participant_id}. Skipping conversion.")
-                continue
-            if os.path.exists(participant_folder):
-                pass
+                print(f"File exists for {participant_id}. Loading...")
             else:
-                os.makedirs(participant_folder, exist_ok=True)
-            print(f"Processing participant: {participant_id}")
-            csv_path1 = os.path.join(os.path.join(config["raw_data_path"], participant_id), config["df_raw_name"])
-            print(f"Reading data from: {csv_path1}")
-            df1 = pd.read_csv(csv_path1)
-            df1 = self.convert_raw_values(df1)
-            df1 = self._apply_standard_scaler(df1)
-            
-            print(f"Converted raw values for participant: {participant_id}.")
-            if config['sensor_type'] == "emg":
-                emg_df = self.get_emg_df(df1,saving_dir=participant_folder)
-            else:
-                imu_df = self.get_IMU_df(df1, config['sensor_type'], config['axis'],saving_dir=participant_folder)
-                print(f"Converted {config['sensor_type']} data along {config['axis']} for participant: {participant_id}.")
-            print(f"Conversion completed for participant: {participant_id}.")
+                print(f"Processing participant: {participant_id}")
+                csv_path1 = os.path.join(os.path.join(config["raw_data_path"], participant_id), config["df_raw_name"])
+                df1 = pd.read_csv(csv_path1)
+                
+                # 1. Convert Units (g, degree/s, etc.)
+                df1 = self.convert_raw_values(df1)
+                
+                local_scaler = StandardScaler()
+                df1 = self._apply_standard_scaler(df1, local_scaler)
+                
+                print(f"Scaled data for: {participant_id}")
+                
+                if config['sensor_type'] == "emg":
+                    self.get_emg_df(df1, saving_dir=participant_folder)
+                else:
+                    self.get_IMU_df(df1, config['sensor_type'], config['axis'], saving_dir=participant_folder)
 
-        merged_df= self.__merge_subjects__(config['sensor_type'])
+        # Merge all processed files
+        merged_df = self.__merge_subjects__(config['sensor_type'])
+        
+        emg_cols = [c for c in merged_df.columns if 'emg' in c.lower()]
+        data_values = merged_df[emg_cols].values
+        mean_val = np.mean(data_values)
+        std_val = np.std(data_values)
+        
+        print(f"FINAL DATA STATS: Mean={mean_val:.4f}, Std={std_val:.4f}")
+        if abs(mean_val) > 0.1 or abs(std_val - 1.0) > 0.1:
+            print("WARNING: Data does not appear to be normalized! Re-normalizing now...")
+            # Emergency re-normalization
+            from sklearn.preprocessing import StandardScaler
+            scaler = StandardScaler()
+            merged_df[emg_cols] = scaler.fit_transform(data_values)
+            
         return merged_df
-    
-    def _apply_standard_scaler(self, df):
-        """Apply zero-mean/unit-variance scaling to numeric sensor channels."""
+
+    def _apply_standard_scaler(self, df, scaler_obj):
+        """Modified to accept a specific scaler object"""
         sensor_cols = [
             col for col in df.columns
             if pd.api.types.is_numeric_dtype(df[col]) and any(keyword in col.lower() for keyword in ("emg", "sensor", "accel", "gyro", "mag"))
         ]
-        if not sensor_cols:
-            return df
+        if not sensor_cols: return df
 
-        tensor_data = torch.tensor(df[sensor_cols].values, dtype=torch.float32)
-        scaled = self.scaler.fit_transform(tensor_data)
-        df[sensor_cols] = scaled.numpy()
+        # Use numpy arrays for sklearn scalers
+        numpy_data = df[sensor_cols].values.astype(float)
+        scaled = scaler_obj.fit_transform(numpy_data)
+        df[sensor_cols] = scaled
         return df
-
 
     def _print_subject_distribution(self, subject_id, df):
         if 'gt' not in df.columns:

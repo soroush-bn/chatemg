@@ -1,10 +1,15 @@
-from tqdm import tqdm
+import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from tqdm import tqdm
+import os
 
-def train_vqvae(model, dataloader,device,optimizer,config):
+def train_vqvae(model, dataloader, device, optimizer, config):
     model.train()
     criterion_recon = nn.MSELoss()
+    
+    # Create checkpoints directory if it doesn't exist
+    checkpoint_dir = "./checkpoints"
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
     # Only ONE progress bar for the Epochs
     epoch_pbar = tqdm(range(config['number_of_epochs']), desc="Training Progress")
@@ -43,7 +48,18 @@ def train_vqvae(model, dataloader,device,optimizer,config):
         avg_embed = total_embed / len(dataloader)
 
         # Print summary ONLY at the end of the epoch
-        # tqdm.write ensures it prints nicely above the progress bar
         tqdm.write(f"Epoch [{epoch+1}/{config['number_of_epochs']}] | Loss: {avg_loss:.4f} | Recon: {avg_recon:.4f} | Embed: {avg_embed:.4f}")
+        
+        # --- CHECKPOINTING (Safety Save) ---
+        # Save every 5 epochs OR if it's the last epoch
+        if (epoch + 1) % 5 == 0 or (epoch + 1) == config['number_of_epochs']:
+            save_path = os.path.join(checkpoint_dir, f"vqvae_epoch_{epoch+1}.pt")
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': avg_loss,
+            }, save_path)
+            tqdm.write(f"--> Checkpoint saved: {save_path}")
+
     return model
-# Run Training
