@@ -6,8 +6,7 @@ if [ -f /etc/profile.d/modules.sh ]; then
     source /etc/profile.d/modules.sh
 fi
 module purge
-module load miniconda/pytorch-tensorflow-gpu-2024.09
-module load bcftools/1.18
+module load anaconda/3
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
