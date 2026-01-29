@@ -7,16 +7,10 @@ if [ -f /etc/profile.d/modules.sh ]; then
 fi
 module purge
 module load miniconda/pytorch-tensorflow-gpu-2024.09
-conda info --base
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda list
 conda activate buildrust
-conda info --base
-conda list
-pip freeze 
-python -m pip install --user tqdm
-conda info --base
 
+python -m pip install --only-binary :all: scikit-learn
 export PYTHONUNBUFFERED=1
 
 # Echo git branch and commit information
