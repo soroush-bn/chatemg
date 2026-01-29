@@ -1,4 +1,4 @@
-name: "test_run5_50_epoch_sklearn"
+name: "test_run6_50_epoch_sklearn"
 number_of_epochs: 50
 input_dim: 8         
 hidden_dim: 512    

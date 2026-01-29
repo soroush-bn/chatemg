@@ -30,11 +30,6 @@ echo "Git Commit (short): $(git rev-parse --short HEAD)"
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 echo "Number of GPUs detected: $NUM_GPUS"
 
-export OPENBLAS_NUM_THREADS=1
-export OMP_NUM_THREADS=1
-export MKL_NUM_THREADS=1
-export NUMEXPR_NUM_THREADS=1
-
 cd VQVAE
 python -u pipeline.py
 
