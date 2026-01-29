@@ -29,7 +29,7 @@ echo "Git Commit (short): $(git rev-parse --short HEAD)"
 # Get number of GPUs available
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 echo "Number of GPUs detected: $NUM_GPUS"
-
+export USE_OPENMP=1
 cd VQVAE
 python -u pipeline.py
 
