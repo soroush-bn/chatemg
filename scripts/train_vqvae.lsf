@@ -6,14 +6,15 @@ if [ -f /etc/profile.d/modules.sh ]; then
     source /etc/profile.d/modules.sh
 fi
 module purge
-module load miniconda/pytorch-tensorflow-gpu-2024.09
+module load miniconda/pytorch-tensorflow-jax-gpu-2024.12
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
+
+python -m pip install --user tqdm
 
 # Debug: verify environment
 echo "Python executable: $(which python)"
 python -c "import sys; print('sys.executable:', sys.executable); print('sys.path:', sys.path)"
-python -c "import sklearn; print('sklearn location:', sklearn.__file__)"
 
 export PYTHONUNBUFFERED=1
 
