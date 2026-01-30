@@ -10,8 +10,8 @@ module load miniconda/pytorch-tensorflow-gpu
 module list
 python -c "import torch; print('PyTorch version:', torch.__version__)"
 
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate buildrust
+# source "$(conda info --base)/etc/profile.d/conda.sh"
+# conda activate buildrust
 
 python -m pip install --user tqdm
 python -m pip install --user PyYAML
