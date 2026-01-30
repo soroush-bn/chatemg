@@ -7,6 +7,8 @@ if [ -f /etc/profile.d/modules.sh ]; then
 fi
 module purge
 module load miniconda/pytorch-tensorflow-gpu
+module list
+python "import torch; print('PyTorch version:', torch.__version__)"
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
