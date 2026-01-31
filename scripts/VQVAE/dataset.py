@@ -10,6 +10,13 @@ from sklearn.preprocessing import StandardScaler
 with open("vqvae_config.yaml", "r") as file:
     config = yaml.safe_load(file)
 
+# Label mapping from convert_to_p7_format.py
+label_mapping = {
+    "Thumb Extension":0,"index Extension":1,"Middle Extension":2,"Ring Extension":3,
+    "Pinky Extension":4,"Thumbs Up":5,"Right Angle":6,"Peace":7,"OK":8,"Horn":9,"Hang Loose":10,
+    "Power Grip":11,"Hand Open":12,"Wrist Extension":13,"Wrist Flexion":14,"Ulnar deviation":15,"Radial Deviation":16    
+}
+
 class EMGDataset(Dataset):
     def __init__(self, window_size=300, stride=1):
         if stride < 1:
@@ -49,7 +56,7 @@ class EMGDataset(Dataset):
                 if 'label' in df.columns:
                     df = df[df['label'].notna() & (df['label'] != 'rest')]
                     
-                    df['gt'] = df['label'] 
+                    df['gt'] = df['label'].map(label_mapping).astype('int64') 
 
                 emg_cols = [c for c in df.columns if 'emg' in c.lower()]
                 

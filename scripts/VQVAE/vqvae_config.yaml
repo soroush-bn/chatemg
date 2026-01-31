@@ -1,4 +1,4 @@
-name: "test_run7_1epoch"
+name: "test_run8_1epoch"
 number_of_epochs: 1
 input_dim: 8         
 hidden_dim: 512    

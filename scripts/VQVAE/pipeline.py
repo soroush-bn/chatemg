@@ -1,6 +1,7 @@
 import os
 import yaml 
 import torch
+import pandas as pd
 from torch.utils.data import DataLoader, random_split
 import numpy as np
 import argparse
@@ -21,11 +22,9 @@ args = parser.parse_args()
 with open(args.config, "r") as file:
     config = yaml.safe_load(file)
 
-# Create unique folder for this run
 save_dir = f"./models/{config['name']}/"
 os.makedirs(save_dir, exist_ok=True)
 
-# Save a copy of the config for reproducibility
 with open(os.path.join(save_dir, "config.yaml"), "w") as file:
     yaml.dump(config, file)
 
@@ -33,7 +32,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Pipeline initialized on {device}. Saving results to: {save_dir}")
 
 # --- 2. Initialize Full Dataset ---
-# This uses the new EMGDataset that exposes self.df
 full_dataset = EMGDataset(window_size=config['window_size'], stride=config['stride'])
 
 # --- 3. Train/Validation Split ---
@@ -56,8 +54,7 @@ assert first_batch.shape == (config['batch_size'], 8, config['window_size']), \
 
 # --- 4. Initialize Model ---
 model = SDformerVQVAE(config).to(device)
-learning_rate = float(config['learning_rate'])
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.AdamW(model.parameters(), lr=float(config['learning_rate']))
 
 # --- 5. Train Model ---
 print("\n--- Starting Training ---")
@@ -76,37 +73,87 @@ evaluate_model(model, val_loader, device, config)
 print("\n--- Generating Diagnostic Plots ---")
 viz = Visualizer(model, device, config)
 
-print("1/4. Visualizing Codebook (t-SNE & Patterns)...")
+print("1/4. Visualizing Codebook...")
 viz.visualize_codebook()
 
-print("2/4. Checking Data Distribution (Real vs Recon t-SNE)...")
+print("2/4. Checking Data Distribution...")
 viz.plot_data_distribution(val_loader, num_samples=2000)
 
 print("3/4. Plotting Random Sample Reconstructions...")
 viz.plot_single_reconstruction(val_loader, sample_index=0)
 viz.plot_single_reconstruction(val_loader, sample_index=10)
-viz.plot_single_reconstruction(val_loader, sample_index=20)
 
 print("4/4. Tracing Full Gesture Pipeline...")
+gestures = [11, 8, 17] # Power Grip, OK, Rest
+for label_id in gestures:
+    for rep in [0, 4]: # Participant 1 & 2
+        try:
+            viz.plot_gesture_pipeline(full_dataset.df, label_id=label_id, repetition_index=rep)
+        except: pass
 
-label_map = {
-    "Thumb Extension":0, "index Extension":1, "Middle Extension":2, "Ring Extension":3,
-    "Pinky Extension":4, "Thumbs Up":5, "Right Angle":6, "Peace":7, "OK":8, "Horn":9, 
-    "Hang Loose":10, "Power Grip":11, "Hand Open":12, "Wrist Extension":13, 
-    "Wrist Flexion":14, "Ulnar deviation":15, "Radial Deviation":16    
-}
+# --- 9. Generate Encoded Dataset (Codebooks Only) ---
+print("\n--- Generating Encoded Dataset (Tokens) ---")
+encoded_save_path = os.path.join(save_dir, "encoded_df.csv")
 
-try:
-    viz.plot_gesture_pipeline(
-        full_dataset.df, 
-        label_name="Power Grip", 
-        label_map=label_map, 
-        duration_sec=2.0
-    )
-except Exception as e:
-    print(f"Could not plot specific gesture pipeline: {e}")
-    print("Trying fallback: High Energy Burst...")
-    # Fallback: Just plot the loudest 2 seconds
-    viz.plot_gesture_pipeline(full_dataset.df, label_name="Loudest Burst", duration_sec=2.0)
+# Create a loader for the ENTIRE dataset (no shuffle, so we match indices)
+# drop_last=False ensures we process every single window
+full_loader = DataLoader(full_dataset, batch_size=128, shuffle=False, drop_last=False)
+
+model.eval()
+all_codes = []
+all_labels = []
+
+# Pre-fetch label data from the dataframe for speed
+# We use the label at the CENTER of each window as the ground truth
+print("Mapping labels to windows...")
+all_gt_values = full_dataset.df['gt'].values
+total_windows = len(full_dataset)
+window_centers = [i * full_dataset.stride + full_dataset.window_size // 2 for i in range(total_windows)]
+
+print(f"Processing {total_windows} windows...")
+
+with torch.no_grad():
+    batch_start_idx = 0
+    for i, batch in enumerate(full_loader):
+        batch = batch.to(device)
+        
+        # Pass through model to get Codebook Indices
+        # returns: x_recon, loss, indices
+        _, _, indices = model(batch)
+        
+        # Shape: [Batch, Time_Steps] (e.g., [128, 75])
+        batch_codes = indices.cpu().numpy()
+        all_codes.append(batch_codes)
+        
+        # Get corresponding labels
+        current_batch_size = batch.size(0)
+        batch_indices = range(batch_start_idx, batch_start_idx + current_batch_size)
+        
+        # Grab labels for these windows
+        # Note: If window center > len(df), this would error, but Dataset length logic prevents it
+        center_indices = [window_centers[idx] for idx in batch_indices]
+        batch_labels = all_gt_values[center_indices]
+        all_labels.append(batch_labels)
+        
+        batch_start_idx += current_batch_size
+        
+        if i % 500 == 0:
+            print(f"  Encoded {batch_start_idx} / {total_windows} samples...")
+
+# Concatenate all batches
+final_codes = np.concatenate(all_codes, axis=0) # [Total_Samples, 75]
+final_labels = np.concatenate(all_labels, axis=0) # [Total_Samples]
+
+# Create DataFrame
+# Columns: gt, col_0, col_1, ... col_74
+token_cols = [f"col_{i}" for i in range(final_codes.shape[1])]
+df_encoded = pd.DataFrame(final_codes, columns=token_cols)
+df_encoded.insert(0, "gt", final_labels)
+
+# Save
+df_encoded.to_csv(encoded_save_path, index=False)
+print(f"Encoded dataset saved successfully!")
+print(f"Dimensions: {df_encoded.shape}")
+print(f"File: {encoded_save_path}")
 
 print(f"\nPipeline Completed Successfully! All results in: {save_dir}")
