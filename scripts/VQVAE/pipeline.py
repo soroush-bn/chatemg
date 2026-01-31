@@ -95,16 +95,13 @@ for label_id in gestures:
 print("\n--- Generating Encoded Dataset (Tokens) ---")
 encoded_save_path = os.path.join(save_dir, "encoded_df.csv")
 
-# Create a loader for the ENTIRE dataset (no shuffle, so we match indices)
-# drop_last=False ensures we process every single window
+# Create a loader for the ENTIRE dataset
 full_loader = DataLoader(full_dataset, batch_size=128, shuffle=False, drop_last=False)
 
 model.eval()
 all_codes = []
 all_labels = []
 
-# Pre-fetch label data from the dataframe for speed
-# We use the label at the CENTER of each window as the ground truth
 print("Mapping labels to windows...")
 all_gt_values = full_dataset.df['gt'].values
 total_windows = len(full_dataset)
@@ -116,36 +113,41 @@ with torch.no_grad():
     batch_start_idx = 0
     for i, batch in enumerate(full_loader):
         batch = batch.to(device)
+        current_batch_size = batch.size(0)
         
-        # Pass through model to get Codebook Indices
-        # returns: x_recon, loss, indices
+        # Pass through model
         _, _, indices = model(batch)
         
-        # Shape: [Batch, Time_Steps] (e.g., [128, 75])
+        # --- FIX: Reshape flattened indices ---
+        # If indices are [Batch * Time], reshape to [Batch, Time]
+        if indices.dim() == 1:
+            indices = indices.view(current_batch_size, -1)
+            
+        # Now shape is [Batch, 75]
         batch_codes = indices.cpu().numpy()
         all_codes.append(batch_codes)
         
         # Get corresponding labels
-        current_batch_size = batch.size(0)
         batch_indices = range(batch_start_idx, batch_start_idx + current_batch_size)
         
-        # Grab labels for these windows
-        # Note: If window center > len(df), this would error, but Dataset length logic prevents it
-        center_indices = [window_centers[idx] for idx in batch_indices]
+        # Safely grab center indices (clamping to max length of df)
+        center_indices = [min(window_centers[idx], len(all_gt_values)-1) for idx in batch_indices]
         batch_labels = all_gt_values[center_indices]
         all_labels.append(batch_labels)
         
         batch_start_idx += current_batch_size
         
-        if i % 500 == 0:
+        if i % 100 == 0:
             print(f"  Encoded {batch_start_idx} / {total_windows} samples...")
 
-# Concatenate all batches
-final_codes = np.concatenate(all_codes, axis=0) # [Total_Samples, 75]
-final_labels = np.concatenate(all_labels, axis=0) # [Total_Samples]
+# Concatenate
+final_codes = np.concatenate(all_codes, axis=0) # Should now be [Total_Samples, 75]
+final_labels = np.concatenate(all_labels, axis=0)
+
+# Debug Print
+print(f"Final Codes Shape: {final_codes.shape}") 
 
 # Create DataFrame
-# Columns: gt, col_0, col_1, ... col_74
 token_cols = [f"col_{i}" for i in range(final_codes.shape[1])]
 df_encoded = pd.DataFrame(final_codes, columns=token_cols)
 df_encoded.insert(0, "gt", final_labels)
@@ -153,7 +155,5 @@ df_encoded.insert(0, "gt", final_labels)
 # Save
 df_encoded.to_csv(encoded_save_path, index=False)
 print(f"Encoded dataset saved successfully!")
-print(f"Dimensions: {df_encoded.shape}")
 print(f"File: {encoded_save_path}")
-
 print(f"\nPipeline Completed Successfully! All results in: {save_dir}")
