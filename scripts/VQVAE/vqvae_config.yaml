@@ -1,5 +1,5 @@
-name: "test_run6_50_epoch_sklearn"
-number_of_epochs: 50
+name: "test_run7_1epoch"
+number_of_epochs: 1
 input_dim: 8         
 hidden_dim: 512    
 codebook_size: 512

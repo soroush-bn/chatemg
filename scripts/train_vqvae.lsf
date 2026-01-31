@@ -30,12 +30,14 @@ echo "Git Branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "Git Commit: $(git rev-parse HEAD)"
 echo "Git Commit (short): $(git rev-parse --short HEAD)"
 
+echo "Config argument: $CONFIG"
+
 # Get number of GPUs available
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 echo "Number of GPUs detected: $NUM_GPUS"
 export USE_OPENMP=1
 cd VQVAE
-python -u pipeline.py
+python -u pipeline.py --config "$CONFIG"
 
 
 # Echo git branch and commit information

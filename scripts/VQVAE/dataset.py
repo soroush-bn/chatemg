@@ -16,14 +16,13 @@ class EMGDataset(Dataset):
             raise ValueError("stride must be >= 1")
         self.window_size = window_size
         self.stride = stride
-        
-        # Load and Process Data
+        self.df = None 
+
         print("Initializing Dataset... (This forces a fresh load of all data)")
         self.data = self._load_and_normalize_all()
         
         print(f"Dataset Ready. Total Samples: {len(self.data)}")
         print(f"Tensor Stats -> Mean: {self.data.mean():.4f}, Std: {self.data.std():.4f}")
-        # Sanity Check: Std should be very close to 1.0
 
     def _load_and_normalize_all(self):
         """
@@ -32,7 +31,6 @@ class EMGDataset(Dataset):
         """
         all_subject_dfs = []
         
-        # 1. Loop through all subjects and load RAW data
         for subject_id in config['participants_list_ids']:
             raw_path = os.path.join(config["raw_data_path"], subject_id, config["df_raw_name"])
             
@@ -42,31 +40,39 @@ class EMGDataset(Dataset):
                 
             print(f"Loading raw data for: {subject_id}")
             df = pd.read_csv(raw_path)
-            
             df = self._convert_units(df)
             
             sensor_cols = [c for c in df.columns if any(k in c.lower() for k in ['emg', 'accel', 'gyro'])]
             df[sensor_cols] = df[sensor_cols].interpolate(method='linear', limit_direction='both').fillna(0)
             
             if config['sensor_type'] == 'emg':
-                # Filter for EMG columns
-                emg_cols = [c for c in df.columns if 'emg' in c.lower()]
                 if 'label' in df.columns:
                     df = df[df['label'].notna() & (df['label'] != 'rest')]
+                    
+                    df['gt'] = df['label'] 
+
+                emg_cols = [c for c in df.columns if 'emg' in c.lower()]
                 
-                # Keep only EMG columns for the dataset tensor
-                df_filtered = df[emg_cols].copy()
+                cols_to_keep = emg_cols + (['gt'] if 'gt' in df.columns else [])
+                
+                df_filtered = df[cols_to_keep].copy()
                 all_subject_dfs.append(df_filtered)
             
+            # (Add IMU logic here if needed)
 
         if not all_subject_dfs:
             raise RuntimeError("No data loaded! Check your paths and participant IDs.")
             
         full_df = pd.concat(all_subject_dfs, axis=0, ignore_index=True)
         
+        self.df = full_df
         print("Applying Global StandardScaler...")
         scaler = StandardScaler()
-        np_data = scaler.fit_transform(full_df.values)
+        
+        emg_cols = [c for c in full_df.columns if 'emg' in c.lower()]
+        data_values = full_df[emg_cols].values
+        
+        np_data = scaler.fit_transform(data_values)
         
         return torch.tensor(np_data, dtype=torch.float32)
 
@@ -86,5 +92,4 @@ class EMGDataset(Dataset):
     def __getitem__(self, idx):
         start = idx * self.stride
         window = self.data[start : start + self.window_size]
-        # Transpose: [Window, Channels] -> [Channels, Window]
         return window.transpose(0, 1)

@@ -8,7 +8,7 @@ def train_vqvae(model, dataloader, device, optimizer, config):
     criterion_recon = nn.MSELoss()
     
     # Create checkpoints directory if it doesn't exist
-    checkpoint_dir = "./checkpoints"
+    checkpoint_dir = f"./models/{config['name']}/checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     # Only ONE progress bar for the Epochs
