@@ -127,8 +127,6 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
     
 
 
-
-
 class ResNetBlock1D(nn.Module):
     """
     ResNet block as described in Table 9:
@@ -155,9 +153,9 @@ class ResNetBlock1D(nn.Module):
         return self.relu(out + residual)
 
 class Encoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim):
+    def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
-        # Architecture per Table 9 [cite: 639]
+        # Architecture per Table 9
 
         # Layer 1: Conv1D (in=d, out=D)
         self.layer1 = nn.Sequential(
@@ -187,9 +185,9 @@ class Encoder(nn.Module):
             nn.ReLU()
         )
 
-        # Layer 6: Final projection (in=D, out=H)
-        # In our config D=H=512, so this keeps dimensions same but mixes features
-        self.layer6 = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1)
+        # Layer 6: Final projection (in=D, out=output_dim/code_dim)
+        # Allows hidden_dim (e.g., 512) to be different from code_dim (e.g., 64)
+        self.layer6 = nn.Conv1d(hidden_dim, output_dim, kernel_size=3, stride=1, padding=1)
 
         # Normalization output layer (Eq 3 mentions h_i is unit modulus)
         # We handle this inside the VQ module, but the encoder outputs raw logits/vectors
@@ -204,13 +202,13 @@ class Encoder(nn.Module):
         return x
 
 class Decoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim):
+    def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
-        # Architecture per Table 10 [cite: 646]
+        # Architecture per Table 10
 
-        # Layer 1: Conv1D
+        # Layer 1: Conv1D (in=input_dim/code_dim, out=D)
         self.layer1 = nn.Sequential(
-            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1),
+            nn.Conv1d(input_dim, hidden_dim, kernel_size=3, stride=1, padding=1),
             nn.ReLU()
         )
 
@@ -243,7 +241,7 @@ class Decoder(nn.Module):
             nn.ReLU(),
             nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
-            nn.Conv1d(hidden_dim, input_dim, kernel_size=3, stride=1, padding=1)
+            nn.Conv1d(hidden_dim, output_dim, kernel_size=3, stride=1, padding=1)
         )
 
     def forward(self, x):
@@ -257,13 +255,21 @@ class Decoder(nn.Module):
     
 
 
-
-
 class SDformerVQVAE(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.encoder = Encoder(config['input_dim'], config['hidden_dim'])
-        self.decoder = Decoder(config['input_dim'], config['hidden_dim'])
+        # Pass explicit dimensions to support mismatched hidden/code dims
+        self.encoder = Encoder(
+            input_dim=config['input_dim'], 
+            hidden_dim=config['hidden_dim'],
+            output_dim=config['code_dim']
+        )
+        
+        self.decoder = Decoder(
+            input_dim=config['code_dim'], 
+            hidden_dim=config['hidden_dim'],
+            output_dim=config['input_dim']
+        )
 
         self.quantizer = SimilarityDrivenVectorQuantizer(
             num_embeddings=config['codebook_size'],
@@ -282,5 +288,3 @@ class SDformerVQVAE(nn.Module):
         x_recon = self.decoder(z_quantized)
 
         return x_recon, loss_embed, indices
-
-# Initialize Model
