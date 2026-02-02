@@ -130,10 +130,14 @@ def compare_models(model_names, device):
 
 if __name__ == "__main__":
     models_to_compare = [
+        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run1_512_512_100epoch",
         "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run2_1024_512_100epoch",
-        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run3_2048_512_100epoch",
-        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run4_2048_2048_100epoch",
-        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run5_512_512_100epoch"
+        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run3_1024_1024_100epoch",
+        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run4_2048_512_100epoch",
+        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run5_2048_2048_100epoch",
+        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run6_512_512_100epoch",
+        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run7_512_512_100epoch",
+        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run8_512_512_100epoch"
     ]
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
