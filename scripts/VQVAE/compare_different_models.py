@@ -10,15 +10,17 @@ from torch.utils.data import DataLoader, random_split
 from model import SDformerVQVAE
 from dataset import EMGDataset
 
-# --- CONFIGURATION ---
-COMPARISON_SAVE_DIR = "/users/labnet5/gr1/sbaghernezha/vqvae_models/comparison/"
+# --- CONFIGURATION (Fixed: Relative Path) ---
+# This will create a folder named 'comparisons' right next to this script
+COMPARISON_SAVE_DIR = "./comparisons/"
 os.makedirs(COMPARISON_SAVE_DIR, exist_ok=True)
 
 def load_model_and_config(model_name, base_dir="./models/", device="cpu"):
     """
     Loads a specific model and its corresponding config file.
-    Handles absolute paths in model_name correctly.
     """
+    # model_name can be a simple folder name if base_dir is set, 
+    # or a full relative path if base_dir is empty.
     model_folder = os.path.join(base_dir, model_name)
     config_path = os.path.join(model_folder, "config.yaml")
     weights_path = os.path.join(model_folder, "final_model.pth")
@@ -78,13 +80,14 @@ def compare_models(model_names, device):
     print(f"--- Saving Results to: {COMPARISON_SAVE_DIR} ---")
     
     # 1. Setup Data (Use first model's config to define the input window)
-    first_model_dir = model_names[0] # Assumes absolute path or correct relative path
-    # Handle the case where model_names has full paths
-    if not os.path.exists(os.path.join(first_model_dir, "config.yaml")):
-        # Try prepending ./models/ if absolute check failed
-        first_model_dir = os.path.join("./models/", model_names[0])
+    # We look for the first model inside ./models/ to get the window size
+    first_model_path = os.path.join("./models/", model_names[0])
 
-    with open(os.path.join(first_model_dir, "config.yaml"), "r") as f:
+    if not os.path.exists(os.path.join(first_model_path, "config.yaml")):
+        print(f"Error: Could not find config for {model_names[0]}")
+        return
+
+    with open(os.path.join(first_model_path, "config.yaml"), "r") as f:
         temp_config = yaml.safe_load(f)
         
     # Initialize dataset ONCE -> All models see the EXACT same input windows
@@ -106,9 +109,10 @@ def compare_models(model_names, device):
 
     # 2. Evaluate Each Model
     for name in model_names:
-        print(f"Evaluating {os.path.basename(name)}...", end=" ")
-        # Pass base_dir="" because 'name' is likely a full path now
-        model, config = load_model_and_config(name, base_dir="", device=device)
+        print(f"Evaluating {name}...", end=" ")
+        
+        # We explicitly assume models are in ./models/
+        model, config = load_model_and_config(name, base_dir="./models/", device=device)
         
         if model is None: continue
 
@@ -138,7 +142,7 @@ def compare_models(model_names, device):
         usage_pct = (unique_tokens / total_possible) * 100
         
         results.append({
-            "Model": os.path.basename(name),
+            "Model": name,
             "MSE": avg_mse,
             "Usage %": usage_pct,
             "Unique Codes": f"{unique_tokens}/{total_possible}",
@@ -168,23 +172,24 @@ def compare_models(model_names, device):
     print(f"\nSaved full results to {save_path}")
 
 if __name__ == "__main__":
+    # LIST RELATIVE FOLDER NAMES (Assuming they are inside ./models/)
     models_to_compare = [
-        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run1_512_512_100epoch",
-        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run2_1024_512_100epoch",
-        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run3_1024_1024_100epoch",
-        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run4_2048_512_100epoch",
-        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run5_2048_2048_100epoch",
-        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run6_512_512_100epoch",
-        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run7_512_512_100epoch",
-        "/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/run8_512_512_100epoch"
+        "run1_512_512_100epoch",
+        "run2_1024_512_100epoch",
+        "run3_1024_1024_100epoch",
+        "run4_2048_512_100epoch",
+        "run5_2048_2048_100epoch",
+        "run6_512_512_100epoch",
+        "run7_512_512_100epoch",
+        "run8_512_512_100epoch"
     ]
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Filter only existing directories
-    existing_models = [m for m in models_to_compare if os.path.exists(m)]
+    # Filter only existing directories inside ./models/
+    existing_models = [m for m in models_to_compare if os.path.exists(os.path.join("./models/", m))]
     
     if len(existing_models) > 0:
         compare_models(existing_models, device)
     else:
-        print("No valid model directories found.")
+        print("No valid model directories found in ./models/. Check your list.")
