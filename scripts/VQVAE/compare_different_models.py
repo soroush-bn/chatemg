@@ -7,20 +7,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, random_split
 
+# Import your custom modules
 from model import SDformerVQVAE
 from dataset import EMGDataset
+from visualizer import Visualizer  # <--- NEW IMPORT
 
-# --- CONFIGURATION (Fixed: Relative Path) ---
-# This will create a folder named 'comparisons' right next to this script
-COMPARISON_SAVE_DIR = "./comparisons/"
-os.makedirs(COMPARISON_SAVE_DIR, exist_ok=True)
+# --- CONFIGURATION ---
+# Base directory for all comparison outputs
+COMPARISON_BASE_DIR = "./comparisons/"
+os.makedirs(COMPARISON_BASE_DIR, exist_ok=True)
 
 def load_model_and_config(model_name, base_dir="./models/", device="cpu"):
     """
     Loads a specific model and its corresponding config file.
     """
-    # model_name can be a simple folder name if base_dir is set, 
-    # or a full relative path if base_dir is empty.
     model_folder = os.path.join(base_dir, model_name)
     config_path = os.path.join(model_folder, "config.yaml")
     weights_path = os.path.join(model_folder, "final_model.pth")
@@ -32,7 +32,6 @@ def load_model_and_config(model_name, base_dir="./models/", device="cpu"):
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
-    # Initialize Model
     try:
         model = SDformerVQVAE(config).to(device)
         model.load_state_dict(torch.load(weights_path, map_location=device))
@@ -42,80 +41,40 @@ def load_model_and_config(model_name, base_dir="./models/", device="cpu"):
         print(f"Error loading {model_name}: {e}")
         return None, None
 
-def plot_and_save_reconstruction(model, x_input, model_name, sample_id, device):
-    """
-    Plots a single sample reconstruction and saves it to the comparison dir.
-    """
-    x_batch = x_input.to(device).unsqueeze(0) # [1, 8, Window]
-    
-    with torch.no_grad():
-        x_recon, _, _ = model(x_batch)
-    
-    orig = x_batch[0].cpu().numpy()
-    recon = x_recon[0].cpu().numpy()
-    mse = np.mean((orig - recon)**2)
-    
-    fig, axes = plt.subplots(8, 1, figsize=(10, 12), sharex=True)
-    time_steps = range(orig.shape[1])
-    
-    for ch in range(8):
-        axes[ch].plot(time_steps, orig[ch], 'k', alpha=0.6, label='Original')
-        axes[ch].plot(time_steps, recon[ch], 'r--', label='Recon')
-        axes[ch].set_ylabel(f'Ch {ch+1}')
-        axes[ch].grid(True, alpha=0.2)
-        axes[ch].spines['top'].set_visible(False)
-        axes[ch].spines['right'].set_visible(False)
-        if ch == 0: axes[ch].legend(loc='upper right')
-
-    clean_name = os.path.basename(model_name)
-    plt.suptitle(f"Model: {clean_name}\nSample: {sample_id} | MSE: {mse:.5f}", y=1.02)
-    plt.tight_layout()
-    
-    save_path = os.path.join(COMPARISON_SAVE_DIR, f"sample_{sample_id}_{clean_name}.png")
-    plt.savefig(save_path, bbox_inches='tight')
-    plt.close(fig)
-
 def compare_models(model_names, device):
-    print(f"--- Comparing Models: {len(model_names)} models found ---")
-    print(f"--- Saving Results to: {COMPARISON_SAVE_DIR} ---")
+    print(f"--- Comparing {len(model_names)} Models ---")
+    print(f"--- Saving Results to: {COMPARISON_BASE_DIR} ---")
     
-    # 1. Setup Data (Use first model's config to define the input window)
-    # We look for the first model inside ./models/ to get the window size
+    # 1. Setup Data (Use first model's config for windowing parameters)
     first_model_path = os.path.join("./models/", model_names[0])
-
     if not os.path.exists(os.path.join(first_model_path, "config.yaml")):
-        print(f"Error: Could not find config for {model_names[0]}")
+        print(f"Error: Config not found for {model_names[0]}")
         return
 
     with open(os.path.join(first_model_path, "config.yaml"), "r") as f:
         temp_config = yaml.safe_load(f)
         
-    # Initialize dataset ONCE -> All models see the EXACT same input windows
+    # Initialize Dataset (Load RAM once)
+    print("Loading Dataset (this may take a moment)...")
     full_dataset = EMGDataset(window_size=temp_config['window_size'], stride=temp_config['stride'])
     
+    # Create Validation Loader for Metrics
     train_size = int(0.8 * len(full_dataset))
     val_size = len(full_dataset) - train_size
     _, val_dataset = random_split(full_dataset, [train_size, val_size])
-    
     val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, drop_last=True)
-    print(f"Validation Set: {len(val_dataset)} samples")
-
-    # Pick fixed samples for visual comparison
-    vis_indices = [0, 20, 40]
-    vis_indices = [i for i in vis_indices if i < len(val_dataset)]
-    fixed_samples = {i: val_dataset[i] for i in vis_indices}
-
+    
     results = []
 
-    # 2. Evaluate Each Model
+    # 2. Loop Through All Models
     for name in model_names:
-        print(f"Evaluating {name}...", end=" ")
+        print(f"\nProcessing Model: {name}")
         
-        # We explicitly assume models are in ./models/
+        # Load
         model, config = load_model_and_config(name, base_dir="./models/", device=device)
-        
         if model is None: continue
 
+        # --- A. Calculate Metrics (MSE & Usage) ---
         total_mse = 0
         all_indices = []
         
@@ -130,49 +89,69 @@ def compare_models(model_names, device):
                 if indices.dim() > 1: indices = indices.flatten()
                 all_indices.append(indices.cpu())
 
-        # Visualize Fixed Samples
-        for idx, sample in fixed_samples.items():
-            plot_and_save_reconstruction(model, sample, name, idx, device)
-
-        # Aggregate Metrics
         avg_mse = total_mse / len(val_loader)
         flat_indices = torch.cat(all_indices)
         unique_tokens = len(torch.unique(flat_indices))
-        total_possible = config['codebook_size']
-        usage_pct = (unique_tokens / total_possible) * 100
+        usage_pct = (unique_tokens / config['codebook_size']) * 100
+        
+        print(f"  > MSE: {avg_mse:.5f} | Usage: {usage_pct:.1f}%")
         
         results.append({
             "Model": name,
             "MSE": avg_mse,
             "Usage %": usage_pct,
-            "Unique Codes": f"{unique_tokens}/{total_possible}",
+            "Unique Codes": f"{unique_tokens}/{config['codebook_size']}",
             "Latent Dim": config['hidden_dim']
         })
-        print(f"Done. (MSE: {avg_mse:.4f})")
 
-    # 3. Create Scorecard
+        # --- B. Visualize Gesture Pipeline ---
+        # We override the visualizer's save directory to put this model's plots 
+        # into its own folder inside ./comparisons/
+        
+        model_save_dir = os.path.join(COMPARISON_BASE_DIR, name)
+        os.makedirs(model_save_dir, exist_ok=True)
+        
+        # Init Visualizer
+        viz = Visualizer(model, device, config)
+        viz.save_dir = model_save_dir # <--- OVERRIDE PATH
+        
+        # Plot "Power Grip" (Label 11), Repetition 0
+        try:
+            print(f"  > Plotting Power Grip (Rep 0)...")
+            viz.plot_gesture_pipeline(
+                full_dataset.df, 
+                label_id=11,     # Power Grip
+                repetition_index=0
+            )
+        except Exception as e:
+            print(f"    ! Could not plot pipeline: {e}")
+
+    # 3. Create & Save Scorecard
     df = pd.DataFrame(results)
     if df.empty: return
 
+    # Calculate Composite Score
     mse_score = (df['MSE'].max() - df['MSE']) / (df['MSE'].max() - df['MSE'].min() + 1e-6)
     usage_score = df['Usage %'] / 100.0
     df['Score'] = (0.6 * mse_score) + (0.4 * usage_score)
     df = df.sort_values(by="Score", ascending=False).reset_index(drop=True)
     
-    print("\n" + "="*50)
+    print("\n" + "="*60)
     print("FINAL COMPARISON SCORECARD")
-    print("="*50)
+    print("="*60)
     print(df[['Model', 'MSE', 'Usage %', 'Unique Codes', 'Score']].to_markdown())
     
     winner = df.iloc[0]
     print(f"\n🏆 The Best Model is: {winner['Model']}")
     
-    save_path = os.path.join(COMPARISON_SAVE_DIR, "model_comparison_results.csv")
-    df.to_csv(save_path, index=False)
-    print(f"\nSaved full results to {save_path}")
+    # Save CSV
+    csv_path = os.path.join(COMPARISON_BASE_DIR, "model_comparison_results.csv")
+    df.to_csv(csv_path, index=False)
+    print(f"\nFull results saved to: {csv_path}")
+    print(f"Gesture plots saved in subfolders at: {COMPARISON_BASE_DIR}")
 
 if __name__ == "__main__":
-    # LIST RELATIVE FOLDER NAMES (Assuming they are inside ./models/)
+    # LIST RELATIVE FOLDER NAMES (must be inside ./models/)
     models_to_compare = [
         "run1_512_512_100epoch",
         "run2_1024_512_100epoch",
@@ -186,7 +165,7 @@ if __name__ == "__main__":
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Filter only existing directories inside ./models/
+    # Filter existing
     existing_models = [m for m in models_to_compare if os.path.exists(os.path.join("./models/", m))]
     
     if len(existing_models) > 0:
