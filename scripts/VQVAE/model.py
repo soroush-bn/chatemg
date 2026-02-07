@@ -114,12 +114,9 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
         # --- COMMITMENT LOSS (on UNNORMALIZED vectors for proper gradients) ---
         # This loss penalizes the encoder for not committing to the quantized codes
         # Equation: ||z_e(x) - sg[e]||^2 where sg = stop gradient
-        commitment_loss = F.mse_loss(flat_input_unnormalized, self.embedding_unnormalized[encoding_indices].detach())
-        
-        # --- CODEBOOK LOSS (encourages embeddings to track encoder outputs) ---
-        # Equation: ||sg[z_e(x)] - e||^2
-        codebook_loss = F.mse_loss(self.embedding_unnormalized[encoding_indices], flat_input_unnormalized.detach())
-        
+# Use the normalized versions for loss to keep scales sane
+        commitment_loss = F.mse_loss(flat_input_norm, self.embedding[encoding_indices].detach())
+        codebook_loss = F.mse_loss(self.embedding[encoding_indices], flat_input_norm.detach())
         # Return losses separately for flexible weighting in training loop
         quantized = inputs + (quantized - inputs).detach()
         return quantized.permute(0, 2, 1), commitment_loss, codebook_loss, encoding_indices

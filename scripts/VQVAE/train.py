@@ -63,7 +63,7 @@ def train_vqvae(model, dataloader, device, optimizer, config):
 
             # Embedding Loss (Equation 6) with configurable lambda weighting
             # Scaled by sqrt(code_dim) to normalize for dimensionality
-            loss_embed = ((config['lambda_loss'] * commitment_loss) + codebook_loss) / (config['code_dim'] ** 0.5)
+            loss_embed = (config['lambda_loss'] * commitment_loss) + codebook_loss
 
             # Total Loss
             loss = loss_recon + loss_embed

@@ -11,7 +11,7 @@ def evaluate_model(model, dataloader, device,config ):
         for i, x in enumerate(dataloader):
             x = x.to(device)
             
-            x_recon, _, indices = model(x)
+            x_recon, _, _, indices = model(x)
             
             mse = F.mse_loss(x_recon, x)
             total_mse += mse.item()
