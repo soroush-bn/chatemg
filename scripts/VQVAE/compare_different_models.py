@@ -14,7 +14,7 @@ from visualizer import Visualizer  # <--- NEW IMPORT
 
 # --- CONFIGURATION ---
 # Base directory for all comparison outputs
-COMPARISON_BASE_DIR = "./comparisons/"
+COMPARISON_BASE_DIR = "./comparisons_lambda/"
 os.makedirs(COMPARISON_BASE_DIR, exist_ok=True)
 
 def load_model_and_config(model_name, base_dir="./models/", device="cpu"):
@@ -81,7 +81,7 @@ def compare_models(model_names, device):
         with torch.no_grad():
             for x in val_loader:
                 x = x.to(device)
-                x_recon, _, indices = model(x)
+                x_recon, _,_, indices = model(x)
                 
                 mse = F.mse_loss(x_recon, x)
                 total_mse += mse.item()
@@ -152,8 +152,9 @@ def compare_models(model_names, device):
 
 if __name__ == "__main__":
     # LIST RELATIVE FOLDER NAMES (must be inside ./models/)
-    models_to_compare = [
-        "run1_512_512_100epoch",
+
+    """
+            "run1_512_512_100epoch",
         "run2_1024_512_100epoch",
         "run3_1024_1024_100epoch",
         "run4_2048_512_100epoch",
@@ -161,6 +162,17 @@ if __name__ == "__main__":
         "run6_512_512_100epoch",
         "run7_512_512_100epoch",
         "run8_512_512_100epoch"
+    """
+    models_to_compare = [
+        "lambda_0.01_sdformerloss",
+        "lambda_0.1_sdformerloss",
+        "lambda_0.25_sdformerloss",
+        "lambda_1_sdformerloss",
+        "lambda_0.01",
+        "lambda_0.1",
+        "lambda_0.25",
+        "lambda_1"
+
     ]
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
