@@ -74,7 +74,7 @@ class Visualizer:
             collected = 0
             for x in dataloader:
                 x = x.to(self.device)
-                x_recon, _, _ = self.model(x)
+                x_recon,_, _, _ = self.model(x)
                 real_list.append(x.view(x.size(0), -1).cpu().numpy())
                 recon_list.append(x_recon.view(x_recon.size(0), -1).cpu().numpy())
                 collected += x.size(0)
@@ -101,7 +101,7 @@ class Visualizer:
         self.model.eval()
         try: batch = next(iter(dataloader)).to(self.device)
         except: return
-        with torch.no_grad(): recon, _, _ = self.model(batch)
+        with torch.no_grad(): recon,_, _, _ = self.model(batch)
         
         orig = batch[sample_index].cpu().numpy()
         rec = recon[sample_index].cpu().numpy()
