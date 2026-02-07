@@ -1,4 +1,4 @@
-name: "lambda_0.25"
+name: "lambda_0.25_sdformerloss"
 number_of_epochs: 100
 input_dim: 8         
 hidden_dim: 512    
