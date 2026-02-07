@@ -120,11 +120,9 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
         # Equation: ||sg[z_e(x)] - e||^2
         codebook_loss = F.mse_loss(self.embedding_unnormalized[encoding_indices], flat_input_unnormalized.detach())
         
-        # Combine losses
-        embedding_loss = (self.lambda_loss * commitment_loss) + codebook_loss
-        
+        # Return losses separately for flexible weighting in training loop
         quantized = inputs + (quantized - inputs).detach()
-        return quantized.permute(0, 2, 1), embedding_loss, encoding_indices
+        return quantized.permute(0, 2, 1), commitment_loss, codebook_loss, encoding_indices
     
 
 
@@ -284,9 +282,9 @@ class SDformerVQVAE(nn.Module):
         z = self.encoder(x)
 
         # 2. Quantize (Similarity Driven)
-        z_quantized, loss_embed, indices = self.quantizer(z)
+        z_quantized, commitment_loss, codebook_loss, indices = self.quantizer(z)
 
         # 3. Decode
         x_recon = self.decoder(z_quantized)
 
-        return x_recon, loss_embed, indices
+        return x_recon, commitment_loss, codebook_loss, indices

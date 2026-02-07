@@ -46,6 +46,8 @@ def train_vqvae(model, dataloader, device, optimizer, config):
         total_loss = 0
         total_recon = 0
         total_embed = 0
+        total_commitment = 0
+        total_codebook = 0
 
         # Iterate normally without tqdm to prevent log flooding
         for batch_idx, x in enumerate(dataloader):
@@ -54,13 +56,17 @@ def train_vqvae(model, dataloader, device, optimizer, config):
             optimizer.zero_grad()
 
             # Forward pass
-            x_recon, loss_embed, _ = model(x)
+            x_recon, commitment_loss, codebook_loss, _ = model(x)
 
             # Reconstruction Loss
             loss_recon = criterion_recon(x_recon, x)
 
-            # Total Loss (Equation 6)
-            loss = loss_recon +loss_embed
+            # Embedding Loss (Equation 6) with configurable lambda weighting
+            # Scaled by sqrt(code_dim) to normalize for dimensionality
+            loss_embed = ((config['lambda_loss'] * commitment_loss) + codebook_loss) / (config['code_dim'] ** 0.5)
+
+            # Total Loss
+            loss = loss_recon + loss_embed
 
             loss.backward()
             optimizer.step()
@@ -69,14 +75,18 @@ def train_vqvae(model, dataloader, device, optimizer, config):
             total_loss += loss.item()
             total_recon += loss_recon.item()
             total_embed += loss_embed.item()
+            total_commitment += commitment_loss.item()
+            total_codebook += codebook_loss.item()
 
         # Calculate epoch averages
         avg_loss = total_loss / len(dataloader)
         avg_recon = total_recon / len(dataloader)
         avg_embed = total_embed / len(dataloader)
+        avg_commitment = total_commitment / len(dataloader)
+        avg_codebook = total_codebook / len(dataloader)
 
         # Print summary ONLY at the end of the epoch
-        tqdm.write(f"Epoch [{epoch+1}/{config['number_of_epochs']}] | Loss: {avg_loss:.4f} | Recon: {avg_recon:.4f} | Embed: {avg_embed:.4f}")
+        tqdm.write(f"Epoch [{epoch+1}/{config['number_of_epochs']}] | Loss: {avg_loss:.4f} | Recon: {avg_recon:.4f} | Embed: {avg_embed:.4f} | Commitment: {avg_commitment:.4f} | Codebook: {avg_codebook:.4f}")
         # Log to WandB (if enabled)
         if config.get('wandb_log', False) and master_process:
             try:
@@ -90,6 +100,8 @@ def train_vqvae(model, dataloader, device, optimizer, config):
                         "epoch/total_loss": avg_loss,
                         "epoch/recon_loss": avg_recon,
                         "epoch/embed_loss": avg_embed,
+                        "epoch/commitment_loss": avg_commitment,
+                        "epoch/codebook_loss": avg_codebook,
                         "epoch/mse": mse_val,
                     }
                 )
