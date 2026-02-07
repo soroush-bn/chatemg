@@ -11,6 +11,34 @@ def train_vqvae(model, dataloader, device, optimizer, config):
     checkpoint_dir = f"./models/{config['name']}/checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
+    # determine if this process should perform logging/checkpointing
+    master_process = config.get('master_process', True)
+
+    # Optional WandB logging initialization (safe for non-interactive servers)
+    if config.get('wandb_log', False) and master_process:
+        try:
+            import wandb
+
+            # Login for non-interactive environments (servers/LSF)
+            wandb_api_key = os.environ.get('WANDB_API_KEY', None)
+            if wandb_api_key:
+                print("Logging into W&B using WANDB_API_KEY environment variable...")
+                wandb.login(key=wandb_api_key)
+            else:
+                print("Warning: WANDB_API_KEY not found. Attempting to use cached credentials...")
+                try:
+                    wandb.login()
+                except Exception as e:
+                    print(f"W&B login failed: {e}")
+                    print("Please set WANDB_API_KEY environment variable or run 'wandb login' manually")
+                    config['wandb_log'] = False
+
+            if config.get('wandb_log', False):
+                wandb.init(project=config.get('wandb_project', 'vqvae'), name=config['name'], config=config)
+        except Exception as e:
+            print(f"W&B import/init error: {e}")
+            config['wandb_log'] = False
+
     # Only ONE progress bar for the Epochs
     epoch_pbar = tqdm(range(config['number_of_epochs']), desc="Training Progress")
 
@@ -32,7 +60,7 @@ def train_vqvae(model, dataloader, device, optimizer, config):
             loss_recon = criterion_recon(x_recon, x)
 
             # Total Loss (Equation 6)
-            loss = loss_recon + config['lambda_loss'] * loss_embed
+            loss = loss_recon +loss_embed
 
             loss.backward()
             optimizer.step()
@@ -49,7 +77,24 @@ def train_vqvae(model, dataloader, device, optimizer, config):
 
         # Print summary ONLY at the end of the epoch
         tqdm.write(f"Epoch [{epoch+1}/{config['number_of_epochs']}] | Loss: {avg_loss:.4f} | Recon: {avg_recon:.4f} | Embed: {avg_embed:.4f}")
-        
+        # Log to WandB (if enabled)
+        if config.get('wandb_log', False) and master_process:
+            try:
+                import wandb
+
+                # compute MSE explicitly (same as recon here)
+                mse_val = avg_recon
+                wandb.log(
+                    {
+                        "epoch": epoch + 1,
+                        "epoch/total_loss": avg_loss,
+                        "epoch/recon_loss": avg_recon,
+                        "epoch/embed_loss": avg_embed,
+                        "epoch/mse": mse_val,
+                    }
+                )
+            except Exception as e:
+                print(f"W&B logging error: {e}")
         # --- CHECKPOINTING (Safety Save) ---
         # Save every 5 epochs OR if it's the last epoch
         if (epoch + 1) % 5 == 0 or (epoch + 1) == config['number_of_epochs']:
@@ -61,5 +106,22 @@ def train_vqvae(model, dataloader, device, optimizer, config):
                 'loss': avg_loss,
             }, save_path)
             tqdm.write(f"--> Checkpoint saved: {save_path}")
+            # upload checkpoint to wandb run files (best-effort)
+            if config.get('wandb_log', False) and master_process:
+                try:
+                    import wandb
+
+                    wandb.save(save_path)
+                except Exception as e:
+                    print(f"W&B save error: {e}")
+
+    # Finish WandB run (if initialized)
+    if config.get('wandb_log', False) and master_process:
+        try:
+            import wandb
+
+            wandb.finish()
+        except Exception as e:
+            print(f"W&B finish error: {e}")
 
     return model

@@ -17,7 +17,9 @@ python -m pip install --user tqdm
 python -m pip install --user PyYAML
 python -m pip install --user matplotlib
 python -m pip install --user seaborn
-
+python -m pip install --user wandb==0.15.11
+export WANDB_API_KEY=$(cat ~/.wandb_key)
+echo "Config argument: $CONFIG"
 
 # Debug: verify environment
 echo "Python executable: $(which python)"
