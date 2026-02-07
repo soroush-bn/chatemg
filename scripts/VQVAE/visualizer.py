@@ -193,7 +193,7 @@ class Visualizer:
         inp = torch.tensor(proc_seg, dtype=torch.float32).transpose(0, 1).unsqueeze(0).to(self.device)
         
         with torch.no_grad():
-            recon, _, _ = self.model(inp)
+            recon, _, _, _ = self.model(inp)
             recon_seg = recon[0].cpu().numpy()
 
         fig, axes = plt.subplots(8, 3, figsize=(18, 12), sharex='col')
