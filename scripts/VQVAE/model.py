@@ -4,12 +4,13 @@ import torch.nn.functional as F
 
 
 class SimilarityDrivenVectorQuantizer(nn.Module):
-    def __init__(self, num_embeddings, embedding_dim, decay=0.99, epsilon=1e-5):
+    def __init__(self, num_embeddings, embedding_dim,lambda_loss = 0.25, decay=0.99, epsilon=1e-5):
         super().__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
         self.decay = decay
         self.epsilon = epsilon
+        self.lambda_loss = lambda_loss
         
         # Initialize embeddings uniformly
         embedding = torch.randn(num_embeddings, embedding_dim)
@@ -120,7 +121,7 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
         codebook_loss = F.mse_loss(self.embedding_unnormalized[encoding_indices], flat_input_unnormalized.detach())
         
         # Combine losses
-        embedding_loss = commitment_loss + 0.25 * codebook_loss
+        embedding_loss = (self.lambda_loss * commitment_loss) + codebook_loss
         
         quantized = inputs + (quantized - inputs).detach()
         return quantized.permute(0, 2, 1), embedding_loss, encoding_indices
@@ -274,6 +275,7 @@ class SDformerVQVAE(nn.Module):
         self.quantizer = SimilarityDrivenVectorQuantizer(
             num_embeddings=config['codebook_size'],
             embedding_dim=config['code_dim'],
+            lambda_loss=config['lambda_loss'],
             decay=config['decay']
         )
 
