@@ -116,7 +116,7 @@ with torch.no_grad():
         current_batch_size = batch.size(0)
         
         # Pass through model
-        _, _, indices = model(batch)
+        _,_, _, indices = model(batch)
         
         # --- FIX: Reshape flattened indices ---
         # If indices are [Batch * Time], reshape to [Batch, Time]
