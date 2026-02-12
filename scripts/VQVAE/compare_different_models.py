@@ -14,7 +14,7 @@ from visualizer import Visualizer  # <--- NEW IMPORT
 
 # --- CONFIGURATION ---
 # Base directory for all comparison outputs
-COMPARISON_BASE_DIR = "./comparisons_lambda/"
+COMPARISON_BASE_DIR = "./comparisons_all/"
 os.makedirs(COMPARISON_BASE_DIR, exist_ok=True)
 
 def load_model_and_config(model_name, base_dir="./models/", device="cpu"):
@@ -164,14 +164,24 @@ if __name__ == "__main__":
         "run8_512_512_100epoch"
     """
     models_to_compare = [
-        "lambda_0.01_sdformerloss",
-        "lambda_0.1_sdformerloss",
-        "lambda_0.25_sdformerloss",
-        "lambda_1_sdformerloss",
         "lambda_0.01",
         "lambda_0.1",
         "lambda_0.25",
-        "lambda_1"
+        "lambda_1",
+        "window_300",
+        "window_600",
+        "stride_10",
+        "stride_25",
+        "stride_50",
+        "codebook_256",
+        "codebook_512",
+        "codebook_1024",
+        "codebook_2048",
+        "code_dim_64",
+        "code_dim_128",
+        "code_dim_512",
+        "code_dim_1024",
+
 
     ]
     
