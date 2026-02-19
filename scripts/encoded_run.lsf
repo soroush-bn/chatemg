@@ -6,13 +6,13 @@ if [ -f /etc/profile.d/modules.sh ]; then
     source /etc/profile.d/modules.sh
 fi
 module purge
-module load miniconda/pytorch-tensorflow-gpu-2024.09
+module load miniconda/pytorch-tensorflow-gpu
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate buildrust
 python -m pip install --user tiktoken
 python -m pip install --user seaborn
-python -m pip install --user wandb==0.15.11
+python -m pip install --user wandb
 export WANDB_API_KEY=$(cat ~/.wandb_key)
 echo "Config argument: $CONFIG"
 
