@@ -19,8 +19,8 @@ from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
 
 # UPDATE: Import the new classes
-from dataset import EncodedEMGDataset
-from model import GPTConfig, ConditionedGPT
+from encoded_dataset import EncodedEMGDataset
+from encoded_model import GPTConfig, ConditionedGPT
 
 import argparse
 
@@ -126,7 +126,7 @@ else:
 
 if master_process:
     print(f"number of training samples: {len(train_dataset)}, number of test samples: {len(test_dataset)}")
-    
+
 def get_batch(split):
     if split == "train":
         return next(iter(train_dataloader))
