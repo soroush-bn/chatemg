@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-from dataset import EncodedEMGDataset
-from model import GPTConfig, ConditionedGPT
+from encoded_dataset import EncodedEMGDataset
+from encoded_dataset import GPTConfig, ConditionedGPT
 
 def get_args():
     parser = argparse.ArgumentParser()
