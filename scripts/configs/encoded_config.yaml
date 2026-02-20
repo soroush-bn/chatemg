@@ -50,7 +50,7 @@ min_lr: 0.00006
 # System settings
 backend: "nccl"
 device: "cuda"
-dtype: "bfloat16"       
+dtype: "float16"       
 compile: false          
 
 # Additional settings
