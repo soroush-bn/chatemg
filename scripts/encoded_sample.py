@@ -12,7 +12,7 @@ import pandas as pd
 import torch
 
 from encoded_dataset import EncodedEMGDataset
-from encoded_dataset import GPTConfig, ConditionedGPT
+from encoded_model import GPTConfig, ConditionedGPT
 
 def get_args():
     parser = argparse.ArgumentParser()

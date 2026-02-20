@@ -28,14 +28,14 @@ encoded_data_path: "../data/encoded_df.csv" # Explicit path for the new train.py
 
 # Model architecture
 n_layer: 6
-n_head: 84
+n_head: 64
 n_embd: 128
 dropout: 0.2
 bias: false
 
 # Optimizer settings
 learning_rate: 0.0006   
-max_iters: 100000
+max_iters: 30000
 weight_decay: 0.1
 beta1: 0.9
 beta2: 0.95
