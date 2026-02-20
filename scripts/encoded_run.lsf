@@ -5,9 +5,9 @@ set -euo pipefail
 if [ -f /etc/profile.d/modules.sh ]; then
     source /etc/profile.d/modules.sh
 fi
-conda activate buildrust
 module purge
 module load miniconda/pytorch-tensorflow-gpu-2024.09
+conda activate buildrust
 module list
 python -c "import torch; print('PyTorch version:', torch.__version__)"
 
