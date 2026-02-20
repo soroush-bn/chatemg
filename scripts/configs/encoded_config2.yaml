@@ -1,4 +1,4 @@
-exp_name: "encoded_test1"
+exp_name: "encoded_test_small"
 wandb_project_name: "decoder_only_transformer_test"
 
 # --- OPTION B: ALL GESTURES ---
@@ -27,9 +27,9 @@ ckpt_path: null
 encoded_data_path: "../data/encoded_df.csv" # Explicit path for the new train.py
 
 # Model architecture
-n_layer: 12
-n_head: 8
-n_embd: 256
+n_layer: 6
+n_head: 84
+n_embd: 128
 dropout: 0.2
 bias: false
 
