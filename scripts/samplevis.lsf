@@ -33,7 +33,7 @@ echo "Git Commit: $(git rev-parse HEAD)"
 echo "Git Commit (short): $(git rev-parse --short HEAD)"
 
 
-python encoded_sample.py --config "$CONFIG"
+#python encoded_sample.py --config "$CONFIG"
 nvidia-smi
 echo "last step"
 
