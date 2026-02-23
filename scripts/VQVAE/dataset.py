@@ -80,7 +80,9 @@ class EMGDataset(Dataset):
         data_values = full_df[emg_cols].values
         
         np_data = scaler.fit_transform(data_values)
-        
+        #assign scaled data back to df for potential future use
+        full_df[emg_cols] = np_data
+        self.df = full_df
         return torch.tensor(np_data, dtype=torch.float32)
 
     def _convert_units(self, df):
@@ -91,6 +93,12 @@ class EMGDataset(Dataset):
             if "mag" in col:   df[col] = df[col] * 0.6
         return df
 
+    def save_df(self, save_path):
+        if self.df is not None:
+            self.df.to_csv(save_path, index=False)
+            print(f"Saved merged DataFrame to: {save_path}")
+        else:
+            print("No DataFrame to save!")
     def __len__(self):
         max_start = len(self.data) - self.window_size
         if max_start < 0: return 0

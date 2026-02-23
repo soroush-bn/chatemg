@@ -33,7 +33,9 @@ print(f"Pipeline initialized on {device}. Saving results to: {save_dir}")
 
 # --- 2. Initialize Full Dataset ---
 full_dataset = EMGDataset(window_size=config['window_size'], stride=config['stride'])
-
+full_dataset.save_df(os.path.join(save_dir, "original_data_after_preprocessing.csv")) 
+print(f"Full dataset loaded with {len(full_dataset)} samples. DataFrame saved for reference.")
+print("$" * 50)
 # --- 3. Train/Validation Split ---
 # 80% Train, 20% Val
 train_size = int(0.8 * len(full_dataset))
