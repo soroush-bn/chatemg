@@ -4,6 +4,7 @@ Decodes synthetic discrete tokens back to raw signals and visualizes them.
 import argparse
 import os
 import yaml
+from decoder import VQVAESignalDecoder
 import numpy as np
 import matplotlib
 import pathlib
@@ -15,7 +16,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # Import the decoder class we just created
-from decoder import VQVAESignalDecoder
 
 def plot_synthetic_signals(signals, labels, save_path, max_plots=9):
     """
