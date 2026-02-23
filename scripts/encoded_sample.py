@@ -131,3 +131,6 @@ if __name__ == "__main__":
     print(f"Saved discrete tokens to: {out_file}")
     print("\nFirst 3 generated samples (Label | Tokens):")
     print(df_generated.head(3))
+
+    del model
+    torch.cuda.empty_cache()
