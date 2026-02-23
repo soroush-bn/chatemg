@@ -71,8 +71,8 @@ def main():
     CONFIG_PATH = "./VQVAE/tuned_config.yaml"
     ORIGINAL_DATA_PATH = "./VQVAE/models/tuned/original_data_after_preprocessing.csv"
     ENCODED_DATA_PATH = "./VQVAE/models/tuned/encoded_df.csv"
-    MODEL_WEIGHTS_PATH = "./VQVAE/models/final_model.pth" 
-    SAVE_OUTPUT_PATH = "./VQVAE/models/reconstructed_final.csv"
+    MODEL_WEIGHTS_PATH = "./VQVAE/models/tuned/final_model.pth" 
+    SAVE_OUTPUT_PATH = "./VQVAE/models/tuned/reconstructed_final.csv"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
