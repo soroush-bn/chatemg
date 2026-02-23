@@ -1,8 +1,9 @@
 import os
 import argparse
+
+import torch
 import numpy as np
 import pandas as pd
-import torch
 import yaml
 
 # Import your VQ-VAE architecture
