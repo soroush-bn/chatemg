@@ -7,6 +7,8 @@ import yaml
 import numpy as np
 import matplotlib
 import pathlib
+import faulthandler
+faulthandler.enable()
 
 # Use 'Agg' backend so matplotlib doesn't try to open a window on the headless server
 matplotlib.use('Agg')
@@ -92,5 +94,5 @@ if __name__ == "__main__":
     
     # 4. Visualize and save the plots
     print("\n--- Starting Visualization ---")
-    plot_filename = os.path.join(args.save_dir, "synthetic_signals_grid.png")
+    plot_filename = os.path.join(save_dir, "synthetic_signals_grid.png")
     plot_synthetic_signals(raw_signals, labels, save_path=plot_filename, max_plots=args.num_plots)
