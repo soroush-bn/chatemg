@@ -34,8 +34,11 @@ echo "Git Commit (short): $(git rev-parse --short HEAD)"
 
 
 python encoded_sample.py --config "$CONFIG"
+nvidia-smi
 echo "last step"
+
 sleep 10
+nvidia-smi
 python encoded_visualizer.py --config "$CONFIG"
 
 
