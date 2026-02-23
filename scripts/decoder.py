@@ -96,7 +96,7 @@ class VQVAESignalDecoder:
         print(f"Decoding {len(tokens)} synthetic gestures...")
         
         # Decode the entire dataset in batches to avoid VRAM overflow if dataset is huge
-        batch_size = 256
+        batch_size = 32
         raw_signals_list = []
         
         for i in range(0, len(tokens), batch_size):
