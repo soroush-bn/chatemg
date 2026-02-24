@@ -82,9 +82,9 @@ def main():
     # --- Path Configuration ---
     CONFIG_PATH = "./VQVAE/tuned_config.yaml"
     ORIGINAL_DATA_PATH = "./VQVAE/models/tuned/original_data_after_preprocessing.csv"
-    ENCODED_DATA_PATH = "./VQVAE/models/tuned/encoded_df.csv"
+    ENCODED_DATA_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_50_25.csv"
     MODEL_WEIGHTS_PATH = "./VQVAE/models/tuned/final_model.pth" 
-    SAVE_OUTPUT_PATH = "./VQVAE/models/tuned/reconstructed_final.csv"
+    SAVE_OUTPUT_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/reconstructed_final.csv"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
