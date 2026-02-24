@@ -11,63 +11,67 @@ def reconstruct_pipeline(original_csv_path, encoded_csv_path, model, device, win
     """
     print("Reading CSV files...")
     df_orig = pd.read_csv(original_csv_path)
-    print(f"Original data shape: {df_orig.shape}")
-    print(f"Original columns: {df_orig.columns.tolist()}")
-    print(f"Original data sample:\n{df_orig.head()}\n")
-    print(f"Encoded data shape: {pd.read_csv(encoded_csv_path).shape}")
-    print(f"Encoded data columns: {pd.read_csv(encoded_csv_path).columns.tolist()}")
-    print(f"Encoded data sample:\n{pd.read_csv(encoded_csv_path).head()}\n")
     df_enc = pd.read_csv(encoded_csv_path)
     
-    # Identify feature columns (everything except the label 'gt')
+    print(f"Original data shape: {df_orig.shape}")
+    print(f"Encoded data shape: {df_enc.shape}")
+    
+    # Identify feature columns (the 9 sensors)
     feature_cols = [c for c in df_orig.columns if c != 'gt']
     
-    # Extract indices: Shape [Total_Windows, 75]
-    # Dropping 'gt' column which is at index 0
+    # --- FIX 1: Use reshape instead of view to avoid stride/contiguous errors ---
+    # Shape of indices after dropping 'gt': [108903, 75]
     indices = torch.tensor(df_enc.drop(columns=['gt']).values, dtype=torch.long).to(device)
     
     print(f"Decoding {indices.shape[0]} windows...")
     model.eval()
     with torch.no_grad():
-        # 1. Map indices back to the normalized codebook vectors
-        flat_indices = indices.view(-1)
+        # Map indices back to the normalized codebook vectors
+        # Flattening with reshape handles non-contiguous memory automatically
+        flat_indices = indices.reshape(-1) 
         z_q = model.quantizer.embedding[flat_indices]
         
-        # 2. Reshape to [Batch, Time, Dim] -> [Batch, 75, code_dim]
-        z_q = z_q.view(indices.shape[0], indices.shape[1], -1)
+        # Reshape to [Batch, Time, Dim] -> [108903, 75, code_dim]
+        z_q = z_q.reshape(indices.shape[0], indices.shape[1], -1)
         
-        # 3. Prepare for Decoder: [Batch, Channels, Length]
+        # Prepare for Decoder: [Batch, Channels, Length]
         z_q = z_q.permute(0, 2, 1).contiguous()
         
-        # 4. Run through Decoder
+        # Run through Decoder -> Output: [108903, 9, 300]
         reconstructed_windows = model.decoder(z_q) 
         reconstructed_np = reconstructed_windows.cpu().numpy()
 
     print("Stitching signal using Overlap-Add averaging...")
-    num_windows, num_channels, _ = reconstructed_np.shape
-    total_recon_len = (num_windows - 1) * stride + window_size
+    num_windows, num_channels, win_len = reconstructed_np.shape
+    total_recon_len = (num_windows - 1) * stride + win_len
     
-    canvas = np.zeros((total_recon_len, num_channels))
-    counts = np.zeros((total_recon_len, num_channels))
+    # --- FIX 2: Use float32 for canvas to save memory on 3.2M rows ---
+    canvas = np.zeros((total_recon_len, num_channels), dtype=np.float32)
+    counts = np.zeros((total_recon_len, num_channels), dtype=np.float32)
     
     for i in range(num_windows):
         start = i * stride
-        end = start + window_size
-        # window_data is [Channels, 300] -> Transpose to [300, Channels]
+        end = start + win_len
+        
+        # Transpose window from [9, 300] to [300, 9]
         canvas[start:end, :] += reconstructed_np[i].T
         counts[start:end, :] += 1
+        
+        if i % 25000 == 0:
+            print(f"  Processed {i}/{num_windows} windows...")
     
+    # Final averaging
     final_signal = canvas / np.maximum(counts, 1)
     
+    # Convert to DataFrame and crop to original length (3267373)
     df_reconstructed = pd.DataFrame(final_signal, columns=feature_cols)
     df_reconstructed = df_reconstructed.iloc[:len(df_orig)]
-    print(f"reconstructed data shape: {df_reconstructed.shape}")
-    print(f"reconstructed data columns: {df_reconstructed.columns.tolist()}")
-    print(f"reconstructed data sample:\n{df_reconstructed.head()}\n")
+    
+    print(f"Final reconstructed shape: {df_reconstructed.shape}")
     return df_reconstructed, df_orig[feature_cols]
 
 def main():
-    # --- 1. Path Configuration ---
+    # --- Path Configuration ---
     CONFIG_PATH = "./VQVAE/tuned_config.yaml"
     ORIGINAL_DATA_PATH = "./VQVAE/models/tuned/original_data_after_preprocessing.csv"
     ENCODED_DATA_PATH = "./VQVAE/models/tuned/encoded_df.csv"
@@ -76,7 +80,7 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # --- 2. Load Config from YAML ---
+    # --- Load Config ---
     if not os.path.exists(CONFIG_PATH):
         print(f"Error: Config file not found at {CONFIG_PATH}")
         return
@@ -85,17 +89,18 @@ def main():
         config = yaml.safe_load(f)
     print(f"Config loaded. Input Dim: {config.get('input_dim')}")
 
-    # --- 3. Initialize and Load Model ---
+    # --- Initialize and Load Model ---
     model = SDformerVQVAE(config).to(device)
     
     if os.path.exists(MODEL_WEIGHTS_PATH):
+        # Load state dict with map_location to handle CPU/GPU transfers
         model.load_state_dict(torch.load(MODEL_WEIGHTS_PATH, map_location=device))
         print(f"Weights loaded from {MODEL_WEIGHTS_PATH}")
     else:
-        print("Error: Model weights not found.")
+        print(f"Error: Model weights not found at {MODEL_WEIGHTS_PATH}")
         return
 
-    # --- 4. Run Reconstruction ---
+    # --- Run Reconstruction ---
     try:
         recon_df, orig_features = reconstruct_pipeline(
             ORIGINAL_DATA_PATH, 
@@ -106,6 +111,8 @@ def main():
             stride=30
         )
 
+        # Calculate Accuracy
+        # Ensure we only compare the overlapping indices
         mse = np.mean((recon_df.values - orig_features.values) ** 2)
         print(f"\nReconstruction MSE: {mse:.8f}")
 
@@ -113,10 +120,10 @@ def main():
         recon_df.to_csv(SAVE_OUTPUT_PATH, index=False)
         print(f"Reconstructed data saved to: {SAVE_OUTPUT_PATH}")
 
-
-
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An error occurred during reconstruction: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
