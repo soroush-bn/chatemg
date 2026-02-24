@@ -4,70 +4,58 @@ import torch
 import os
 import yaml
 from VQVAEmodel import SDformerVQVAE
-
-def reconstruct_pipeline(original_csv_path, encoded_csv_path, model, device, window_size=300, stride=30):
-    """
-    Decodes tokens from encoded_df and stitches them back together using Overlap-Add.
-    """
+def reconstruct_pipeline(original_csv_path, encoded_csv_path, model, device, window_size=300, stride=30, batch_size=256):
     print("Reading CSV files...")
     df_orig = pd.read_csv(original_csv_path)
     df_enc = pd.read_csv(encoded_csv_path)
     
-    print(f"Original data shape: {df_orig.shape}")
-    print(f"Encoded data shape: {df_enc.shape}")
-    
-    # Identify feature columns (the 9 sensors)
     feature_cols = [c for c in df_orig.columns if c != 'gt']
+    indices_np = df_enc.drop(columns=['gt']).values
+    num_windows = indices_np.shape[0]
     
-    # --- FIX 1: Use reshape instead of view to avoid stride/contiguous errors ---
-    # Shape of indices after dropping 'gt': [108903, 75]
-    indices = torch.tensor(df_enc.drop(columns=['gt']).values, dtype=torch.long).to(device)
+    print(f"Decoding {num_windows} windows in batches of {batch_size}...")
     
-    print(f"Decoding {indices.shape[0]} windows...")
+    # Initialize the "canvas" on CPU to save GPU memory
+    total_recon_len = (num_windows - 1) * stride + window_size
+    canvas = np.zeros((total_recon_len, len(feature_cols)), dtype=np.float32)
+    counts = np.zeros((total_recon_len, len(feature_cols)), dtype=np.float32)
+
     model.eval()
     with torch.no_grad():
-        # Map indices back to the normalized codebook vectors
-        # Flattening with reshape handles non-contiguous memory automatically
-        flat_indices = indices.reshape(-1) 
-        z_q = model.quantizer.embedding[flat_indices]
-        
-        # Reshape to [Batch, Time, Dim] -> [108903, 75, code_dim]
-        z_q = z_q.reshape(indices.shape[0], indices.shape[1], -1)
-        
-        # Prepare for Decoder: [Batch, Channels, Length]
-        z_q = z_q.permute(0, 2, 1).contiguous()
-        
-        # Run through Decoder -> Output: [108903, 9, 300]
-        reconstructed_windows = model.decoder(z_q) 
-        reconstructed_np = reconstructed_windows.cpu().numpy()
+        for i in range(0, num_windows, batch_size):
+            # 1. Slice the current batch
+            batch_indices = torch.tensor(indices_np[i : i + batch_size], dtype=torch.long).to(device)
+            
+            # 2. Map to codebook and reshape
+            # [Batch, Time, Dim]
+            z_q = model.quantizer.embedding[batch_indices.reshape(-1)]
+            z_q = z_q.reshape(batch_indices.shape[0], batch_indices.shape[1], -1)
+            z_q = z_q.permute(0, 2, 1).contiguous() 
+            
+            # 3. Decode batch
+            batch_recon = model.decoder(z_q) # Result: [Batch, 9, 300]
+            
+            # 4. Move to CPU and add to canvas (Overlap-Add)
+            batch_recon_np = batch_recon.cpu().numpy()
+            
+            for j in range(batch_recon_np.shape[0]):
+                global_idx = i + j
+                start = global_idx * stride
+                end = start + window_size
+                
+                # Transpose [9, 300] to [300, 9] for the canvas
+                canvas[start:end, :] += batch_recon_np[j].T
+                counts[start:end, :] += 1
 
-    print("Stitching signal using Overlap-Add averaging...")
-    num_windows, num_channels, win_len = reconstructed_np.shape
-    total_recon_len = (num_windows - 1) * stride + win_len
-    
-    # --- FIX 2: Use float32 for canvas to save memory on 3.2M rows ---
-    canvas = np.zeros((total_recon_len, num_channels), dtype=np.float32)
-    counts = np.zeros((total_recon_len, num_channels), dtype=np.float32)
-    
-    for i in range(num_windows):
-        start = i * stride
-        end = start + win_len
-        
-        # Transpose window from [9, 300] to [300, 9]
-        canvas[start:end, :] += reconstructed_np[i].T
-        counts[start:end, :] += 1
-        
-        if i % 25000 == 0:
-            print(f"  Processed {i}/{num_windows} windows...")
-    
-    # Final averaging
+            if i % (batch_size * 10) == 0:
+                print(f"  Processed {i}/{num_windows} windows...")
+
+    print("Finalizing signal averaging...")
     final_signal = canvas / np.maximum(counts, 1)
     
-    # Convert to DataFrame and crop to original length (3267373)
     df_reconstructed = pd.DataFrame(final_signal, columns=feature_cols)
     df_reconstructed = df_reconstructed.iloc[:len(df_orig)]
     
-    print(f"Final reconstructed shape: {df_reconstructed.shape}")
     return df_reconstructed, df_orig[feature_cols]
 
 def main():
