@@ -197,7 +197,7 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
     print(f"Average F1-Score:  {avg_f1:.2f}%")
 
 if __name__ == "__main__":
-    CONFIG_PATH = "./VQVAE/models/tuned/final_model.pth" 
+    CONFIG_PATH = "./VQVAE/models/tuned/config.yaml" 
     VQVAE_WEIGHTS = "./VQVAE/models/tuned/final_model.pth"
     ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/data/encoded_df.csv"
     
