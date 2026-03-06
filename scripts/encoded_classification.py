@@ -115,13 +115,13 @@ def train_and_evaluate(model, train_loader, test_loader, device, epochs=20, lr=0
     f1 = f1_score(all_targets, all_preds, average='weighted', zero_division=0)
     
     return acc, prec, rec, f1
-
 def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
+    # --- Setup & Data Loading ---
     print("Loading VQ-VAE to access codebook...")
-    with open(config_path, 'r') as f:
+    with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
         
     vqvae = SDformerVQVAE(config).to(device)
@@ -131,7 +131,7 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
     print(f"Loading synthetic data from {encoded_df_path}...")
     df = pd.read_csv(encoded_df_path)
     
-    # Ensure labels are 0-indexed. If they are 0-16, this does nothing. If 1-17, it shifts them.
+    # Ensure labels are 0-indexed.
     gt_raw = df['gt'].values
     labels = gt_raw - gt_raw.min() 
     y = torch.tensor(labels, dtype=torch.long)
@@ -145,10 +145,10 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
         flat_indices = indices.reshape(-1)
         embeddings = vqvae.quantizer.embedding[flat_indices]
         embeddings = embeddings.reshape(num_samples, seq_len, -1)
-        # Flatten sequence: [Num_Samples, Sequence_Length * Code_Dim]
-        X = embeddings.reshape(num_samples, -1).cpu()
+        X = embeddings.cpu()
     
-    input_size = X.shape[1]
+    code_dim = X.shape[-1]
+    print(f"Data mapped successfully. Shape: {X.shape}")
 
     print("Extracting Participant boundaries based on GT order...")
     participant_ids = np.zeros(num_samples, dtype=int)
@@ -164,10 +164,9 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
 
     # SCENARIO 1: Between-Subjects 
     print(f"\n{'='*50}")
-    print("SCENARIO 1:  Classification (All Participants)")
+    print("SCENARIO 1: Classification (All Participants)")
     print(f"{'='*50}")
     
-    # 80/20 split across all data, stratified by gesture class
     X_train_s1, X_test_s1, y_train_s1, y_test_s1 = train_test_split(
         X, y, test_size=0.20, random_state=42, stratify=y
     )
@@ -175,7 +174,8 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
     train_loader_s1 = DataLoader(TensorDataset(X_train_s1, y_train_s1), batch_size=128, shuffle=True)
     test_loader_s1 = DataLoader(TensorDataset(X_test_s1, y_test_s1), batch_size=128, shuffle=False)
     
-    model_s1 = CNNClassifier().to(device)
+    # Use the new CNN
+    model_s1 = CNNClassifier(code_dim=code_dim, num_classes=17).to(device)
     acc_s1, prec_s1, rec_s1, f1_s1 = train_and_evaluate(
         model_s1, train_loader_s1, test_loader_s1, device, epochs=20, verbose=True
     )
@@ -191,12 +191,10 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
     scenario2_metrics = {'acc': [], 'prec': [], 'rec': [], 'f1': []}
     
     for p_id in range(num_participants):
-        # Isolate data for this specific participant
         p_mask = (participant_ids == p_id)
         X_p = X[p_mask]
         y_p = y[p_mask]
         
-        # 80/20 Split for this specific participant, stratified by gesture
         X_train_p, X_test_p, y_train_p, y_test_p = train_test_split(
             X_p, y_p, test_size=0.20, random_state=42, stratify=y_p
         )
@@ -204,10 +202,9 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
         train_loader_p = DataLoader(TensorDataset(X_train_p, y_train_p), batch_size=128, shuffle=True)
         test_loader_p = DataLoader(TensorDataset(X_test_p, y_test_p), batch_size=128, shuffle=False)
         
-        # Initialize a fresh model for this participant
-        model_p = CNNClassifier().to(device)
+        # Initialize a fresh CNN model for this participant
+        model_p = CNNClassifier(code_dim=code_dim, num_classes=17).to(device)
         
-        # Train and Evaluate 
         acc_p, prec_p, rec_p, f1_p = train_and_evaluate(
             model_p, train_loader_p, test_loader_p, device, epochs=20, verbose=False
         )
@@ -219,7 +216,6 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
         
         print(f"Participant {p_id} -> Acc: {acc_p*100:.2f}% | F1: {f1_p*100:.2f}%")
 
-    # Averages for Scenario 2
     avg_acc = np.mean(scenario2_metrics['acc']) * 100
     avg_prec = np.mean(scenario2_metrics['prec']) * 100
     avg_rec = np.mean(scenario2_metrics['rec']) * 100
@@ -230,7 +226,6 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
     print(f"Average Precision: {avg_prec:.2f}%")
     print(f"Average Recall:    {avg_rec:.2f}%")
     print(f"Average F1-Score:  {avg_f1:.2f}%")
-
 if __name__ == "__main__":
     CONFIG_PATH = "./VQVAE/models/tuned/config.yaml" 
     VQVAE_WEIGHTS = "./VQVAE/models/tuned/final_model.pth"
