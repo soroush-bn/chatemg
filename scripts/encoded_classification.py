@@ -11,6 +11,42 @@ import os
 
 from VQVAEmodel import SDformerVQVAE
 
+class CNNClassifier(nn.Module):
+    def __init__(self, code_dim=32, num_classes=17):
+        super().__init__()
+        # PyTorch Conv1d expects input shape: [Batch, Channels, Time]
+        # Our input will be reshaped from [Batch, 75, 32] to [Batch, 32, 75]
+        
+        self.features = nn.Sequential(
+            nn.Conv1d(in_channels=code_dim, out_channels=64, kernel_size=5, padding=2),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2), # Halves the time dimension
+            
+            nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            
+            nn.AdaptiveAvgPool1d(1) 
+        )
+        
+        self.classifier = nn.Sequential(
+            nn.Dropout(0.4),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, num_classes)
+        )
+
+    def forward(self, x):
+        # x comes in as [Batch, 75, 32]
+        # Permute to [Batch, Channels, Time] -> [Batch, 32, 75]
+        x = x.permute(0, 2, 1)
+        
+        x = self.features(x) # Output: [Batch, 128, 1]
+        x = x.squeeze(-1)    # Output: [Batch, 128]
+        
+        return self.classifier(x)
+    
 class MLPClassifier(nn.Module):
     def __init__(self, input_size, hidden_sizes=[512, 256, 128], num_classes=17):
         super().__init__()
@@ -84,7 +120,6 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # --- Setup & Data Loading ---
     print("Loading VQ-VAE to access codebook...")
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -140,7 +175,7 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
     train_loader_s1 = DataLoader(TensorDataset(X_train_s1, y_train_s1), batch_size=128, shuffle=True)
     test_loader_s1 = DataLoader(TensorDataset(X_test_s1, y_test_s1), batch_size=128, shuffle=False)
     
-    model_s1 = MLPClassifier(input_size=input_size, num_classes=17).to(device)
+    model_s1 = CNNClassifier().to(device)
     acc_s1, prec_s1, rec_s1, f1_s1 = train_and_evaluate(
         model_s1, train_loader_s1, test_loader_s1, device, epochs=20, verbose=True
     )
@@ -170,7 +205,7 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
         test_loader_p = DataLoader(TensorDataset(X_test_p, y_test_p), batch_size=128, shuffle=False)
         
         # Initialize a fresh model for this participant
-        model_p = MLPClassifier(input_size=input_size, num_classes=17).to(device)
+        model_p = CNNClassifier().to(device)
         
         # Train and Evaluate 
         acc_p, prec_p, rec_p, f1_p = train_and_evaluate(
