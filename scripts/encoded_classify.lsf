@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -euo pipefail
+# Load environment so "module" command works
+if [ -f /etc/profile.d/modules.sh ]; then
+    source /etc/profile.d/modules.sh
+fi
+module purge
+module load miniconda/pytorch-tensorflow-gpu
+python -c "import torch; print('PyTorch version:', torch.__version__)"
+
+
+
+
+# Echo git branch and commit information
+echo "Git Branch: $(git rev-parse --abbrev-ref HEAD)"
+echo "Git Commit: $(git rev-parse HEAD)"
+echo "Git Commit (short): $(git rev-parse --short HEAD)"
+
+# Get number of GPUs available
+NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+echo "Number of GPUs detected: $NUM_GPUS"
+
+
+python encoded_classification.py 
+

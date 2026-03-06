@@ -98,7 +98,8 @@ def run_batch_generation():
         cols = ["gt"] + [f"col_{j}" for j in range(total_window_size)]
         output_data = np.concatenate([all_labels.cpu().numpy().reshape(-1, 1), final_tokens], axis=1)
         df_out = pd.DataFrame(output_data, columns=cols)
-
+        print(f"Saving generated dataset for ratio {prompt_size}:{gen_size}...")
+        print(f"Output shape: {df_out.shape}, Sample row:\n{df_out.iloc[0]}")
         file_name = f"synthetic_df_{prompt_size}_{gen_size}.csv"
         save_path = os.path.join(save_dir, file_name)
         df_out.to_csv(save_path, index=False)
