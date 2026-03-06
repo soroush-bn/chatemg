@@ -232,3 +232,30 @@ if __name__ == "__main__":
     ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/data/encoded_df.csv"
     
     classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_70_5.csv"
+    print("\n\nNow evaluating on the synthetic dataset with 70% real and 5% synthetic tokens...")
+    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
+
+
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_60_15.csv"
+    print("\n\nNow evaluating on the synthetic dataset with 60% real and 15% synthetic tokens...")
+    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
+
+
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_50_25.csv"
+    print("\n\nNow evaluating on the synthetic dataset with 50% real and 25% synthetic tokens...")
+    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
+
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_50_25.csv"
+    print("\n\nNow evaluating on the synthetic dataset with 50% real and 25% synthetic tokens...")
+    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
+
+    
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_25_50.csv"
+    print("\n\nNow evaluating on the synthetic dataset with 25% real and 50% synthetic tokens...")
+    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
+
+    
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_5_70.csv"
+    print("\n\nNow evaluating on the synthetic dataset with 5% real and 70% synthetic tokens...")
+    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
