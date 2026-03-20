@@ -22,9 +22,8 @@ NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 echo "Number of GPUs detected: $NUM_GPUS"
 
 
-python encoded_classification.py 
+# python encoded_classification.py 
 
 echo "going for cross domain validation"
 
 python encoded_cross_domain_validation.py
-    

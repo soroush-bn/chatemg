@@ -40,9 +40,9 @@ class CNNClassifier(nn.Module):
         x = x.squeeze(-1)   
         return self.classifier(x)
 
-# --- 2. Helper: Load and Map Data ---
+# --- 2. Helper: Load, Embed, and Chunk Data ---
 def load_and_embed_data(csv_path, vqvae, device):
-    """Loads a CSV and converts discrete tokens to continuous latent embeddings."""
+    """Loads a CSV, maps tokens to embeddings, and detects participant boundaries."""
     df = pd.read_csv(csv_path)
     
     gt_raw = df['gt'].values
@@ -58,11 +58,18 @@ def load_and_embed_data(csv_path, vqvae, device):
         embeddings = embeddings.reshape(num_samples, seq_len, -1)
         X = embeddings.cpu()
         
-    return X, y
+    # Detect participant boundaries based on GT drops (e.g., 16 -> 0)
+    participant_ids = np.zeros(num_samples, dtype=int)
+    current_p = 0
+    for i in range(1, num_samples):
+        if gt_raw[i] < gt_raw[i-1]:
+            current_p += 1
+        participant_ids[i] = current_p
+        
+    return X, y, participant_ids, current_p + 1
 
 # --- 3. Helper: Train Model ---
 def train_model(X_train, y_train, device, code_dim=32, epochs=20, lr=0.001):
-    """Trains a CNN on the provided dataset and returns the trained model."""
     dataset = TensorDataset(X_train, y_train)
     loader = DataLoader(dataset, batch_size=128, shuffle=True)
     
@@ -72,22 +79,18 @@ def train_model(X_train, y_train, device, code_dim=32, epochs=20, lr=0.001):
     
     model.train()
     for epoch in range(epochs):
-        running_loss = 0.0
         for batch_X, batch_y in loader:
             batch_X, batch_y = batch_X.to(device), batch_y.to(device)
-            
             optimizer.zero_grad()
             outputs = model(batch_X)
             loss = criterion(outputs, batch_y)
             loss.backward()
             optimizer.step()
-            running_loss += loss.item()
             
     return model
 
 # --- 4. Helper: Evaluate Model ---
 def evaluate_model(model, X_test, y_test, device):
-    """Evaluates a trained model on a test set and returns metrics."""
     dataset = TensorDataset(X_test, y_test)
     loader = DataLoader(dataset, batch_size=128, shuffle=False)
     
@@ -105,11 +108,9 @@ def evaluate_model(model, X_test, y_test, device):
             all_targets.extend(batch_y.cpu().numpy())
 
     acc = accuracy_score(all_targets, all_preds)
-    prec = precision_score(all_targets, all_preds, average='weighted', zero_division=0)
-    rec = recall_score(all_targets, all_preds, average='weighted', zero_division=0)
     f1 = f1_score(all_targets, all_preds, average='weighted', zero_division=0)
     
-    return acc, prec, rec, f1
+    return acc, f1
 
 # --- 5. Main Cross-Validation Pipeline ---
 def cross_domain_validation():
@@ -138,47 +139,90 @@ def cross_domain_validation():
     vqvae.load_state_dict(torch.load(VQVAE_WEIGHTS, map_location=device))
     vqvae.eval()
 
-    # --- Load Real Data ---
+    # --- Load Real Data Baseline ---
     print(f"Loading Real Baseline Data: {REAL_DATA_PATH}")
-    X_real, y_real = load_and_embed_data(REAL_DATA_PATH, vqvae, device)
+    X_real, y_real, p_ids_real, num_participants = load_and_embed_data(REAL_DATA_PATH, vqvae, device)
     code_dim = X_real.shape[-1]
     
-    print("\n" + "="*60)
-    print("PHASE 1: Train on REAL -> Test on SYNTHETIC")
-    print("="*60)
+    # --- PRE-TRAIN BASELINE REAL MODELS ---
+    print("\nPre-training Baseline Real Models (This only happens once)...")
     
-    # Train ONE model on the entire Real dataset
-    print("Training baseline model on 100% of Real Data... (Please wait)")
-    model_real = train_model(X_real, y_real, device, code_dim=code_dim, epochs=20)
-    print("Baseline model training complete.\n")
+    # Global Model (Scenario 1)
+    print("  -> Training Global Real Model (All Subjects)...")
+    global_real_model = train_model(X_real, y_real, device, code_dim=code_dim, epochs=20)
     
-    # Evaluate on all synthetic datasets
-    for name, path in SYNTH_DATASETS.items():
-        if not os.path.exists(path):
-            print(f"Skipping {name} - File not found.")
+    # Per-Participant Models (Scenario 2)
+    per_participant_real_models = []
+    print(f"  -> Training {num_participants} Individual Real Models (Within-Subject)...")
+    for p_id in range(num_participants):
+        p_mask = (p_ids_real == p_id)
+        model_p = train_model(X_real[p_mask], y_real[p_mask], device, code_dim=code_dim, epochs=20)
+        per_participant_real_models.append(model_p)
+        
+    print("Baseline training complete.\n")
+
+    # --- LOOP OVER SYNTHETIC DATASETS ---
+    for synth_name, synth_path in SYNTH_DATASETS.items():
+        if not os.path.exists(synth_path):
+            print(f"Skipping {synth_name} - File not found at {synth_path}")
             continue
             
-        X_synth, y_synth = load_and_embed_data(path, vqvae, device)
-        acc, prec, rec, f1 = evaluate_model(model_real, X_synth, y_synth, device)
-        print(f"[Test on {name}] -> Acc: {acc*100:.2f}% | F1: {f1*100:.2f}%")
-
-
-    print("\n" + "="*60)
-    print("PHASE 2: Train on SYNTHETIC -> Test on REAL")
-    print("="*60)
-    
-    # Train a new model for EACH synthetic dataset and test on Real data
-    for name, path in SYNTH_DATASETS.items():
-        if not os.path.exists(path):
-            continue
+        print("="*70)
+        print(f"EVALUATING SYNTHETIC DATASET: {synth_name}")
+        print("="*70)
+        
+        # Load this specific synthetic dataset
+        X_synth, y_synth, p_ids_synth, _ = load_and_embed_data(synth_path, vqvae, device)
+        
+        # -----------------------------------------------------------------
+        # SCENARIO 1: BETWEEN-SUBJECTS (Global)
+        # -----------------------------------------------------------------
+        print("\n--- SCENARIO 1: BETWEEN-SUBJECTS (Global Classification) ---")
+        
+        # Phase 1A: Train Real -> Test Synth
+        acc_1A, f1_1A = evaluate_model(global_real_model, X_synth, y_synth, device)
+        print(f"[Train: REAL -> Test: SYNTH] Accuracy: {acc_1A*100:.2f}% | F1: {f1_1A*100:.2f}%")
+        
+        # Phase 1B: Train Synth -> Test Real
+        # We must train a new global model on this synthetic dataset
+        global_synth_model = train_model(X_synth, y_synth, device, code_dim=code_dim, epochs=20)
+        acc_1B, f1_1B = evaluate_model(global_synth_model, X_real, y_real, device)
+        print(f"[Train: SYNTH -> Test: REAL] Accuracy: {acc_1B*100:.2f}% | F1: {f1_1B*100:.2f}%")
+        
+        # -----------------------------------------------------------------
+        # SCENARIO 2: WITHIN-SUBJECT (Per-Person)
+        # -----------------------------------------------------------------
+        print("\n--- SCENARIO 2: WITHIN-SUBJECT (Per-Participant Averaged) ---")
+        
+        s2_metrics_real_to_synth = {'acc': [], 'f1': []}
+        s2_metrics_synth_to_real = {'acc': [], 'f1': []}
+        
+        for p_id in range(num_participants):
+            # Masks for participant p
+            mask_real = (p_ids_real == p_id)
+            mask_synth = (p_ids_synth == p_id)
             
-        print(f"\nTraining model on 100% of {name}...")
-        X_synth, y_synth = load_and_embed_data(path, vqvae, device)
+            # Phase 2A: Train Real (Pre-trained) -> Test Synth
+            acc_2A, f1_2A = evaluate_model(per_participant_real_models[p_id], X_synth[mask_synth], y_synth[mask_synth], device)
+            s2_metrics_real_to_synth['acc'].append(acc_2A)
+            s2_metrics_real_to_synth['f1'].append(f1_2A)
+            
+            # Phase 2B: Train Synth -> Test Real
+            synth_model_p = train_model(X_synth[mask_synth], y_synth[mask_synth], device, code_dim=code_dim, epochs=20)
+            acc_2B, f1_2B = evaluate_model(synth_model_p, X_real[mask_real], y_real[mask_real], device)
+            s2_metrics_synth_to_real['acc'].append(acc_2B)
+            s2_metrics_synth_to_real['f1'].append(f1_2B)
+            
+        # Calculate Averages for Scenario 2
+        avg_acc_2A = np.mean(s2_metrics_real_to_synth['acc']) * 100
+        avg_f1_2A = np.mean(s2_metrics_real_to_synth['f1']) * 100
         
-        model_synth = train_model(X_synth, y_synth, device, code_dim=code_dim, epochs=20)
+        avg_acc_2B = np.mean(s2_metrics_synth_to_real['acc']) * 100
+        avg_f1_2B = np.mean(s2_metrics_synth_to_real['f1']) * 100
         
-        acc, prec, rec, f1 = evaluate_model(model_synth, X_real, y_real, device)
-        print(f"[Train on {name} -> Test on Real Baseline] -> Acc: {acc*100:.2f}% | F1: {f1*100:.2f}%")
+        print(f"[Train: REAL -> Test: SYNTH] Avg Accuracy: {avg_acc_2A:.2f}% | Avg F1: {avg_f1_2A:.2f}%")
+        print(f"[Train: SYNTH -> Test: REAL] Avg Accuracy: {avg_acc_2B:.2f}% | Avg F1: {avg_f1_2B:.2f}%")
+        print("\n")
 
 if __name__ == "__main__":
     cross_domain_validation()
