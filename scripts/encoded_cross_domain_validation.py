@@ -8,7 +8,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import yaml
 import os
 
-from VQVAEmodel import SDformerVQVAE
+from VQVAE.model import SDformerVQVAE
 
 # --- 1. CNN Architecture ---
 class CNNClassifier(nn.Module):
@@ -118,16 +118,16 @@ def cross_domain_validation():
     print(f"Using device: {device}\n")
 
     # --- Configs & Paths ---
-    CONFIG_PATH = "./VQVAE/models/tuned/config.yaml" 
-    VQVAE_WEIGHTS = "./VQVAE/models/tuned/final_model.pth"
+    CONFIG_PATH = "./VQVAE/models/tuned2/config.yaml" 
+    VQVAE_WEIGHTS = "./VQVAE/models/tuned2/final_model.pth"
     REAL_DATA_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/data/encoded_df.csv"
     
     SYNTH_DATASETS = {
-        "70% Real / 5% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_70_5.csv",
-        "60% Real / 15% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_60_15.csv",
-        "50% Real / 25% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_50_25.csv",
-        "25% Real / 50% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_25_50.csv",
-        "5% Real / 70% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_5_70.csv"
+        "70% Real / 5% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_70_5.csv",
+        "60% Real / 15% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_60_15.csv",
+        "50% Real / 25% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_50_25.csv",
+        "25% Real / 50% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_25_50.csv",
+        "5% Real / 70% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_5_70.csv"
     }
 
     # --- Initialization ---

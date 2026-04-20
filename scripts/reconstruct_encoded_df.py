@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import os
 import yaml
-from VQVAEmodel import SDformerVQVAE
+from VQVAE.model import SDformerVQVAE
 
 def reconstruct_pipeline(original_csv_path, encoded_csv_path, model, device, window_size=300, stride=30, batch_size=512):
     """
@@ -80,11 +80,11 @@ def reconstruct_pipeline(original_csv_path, encoded_csv_path, model, device, win
 
 def main():
     # --- Path Configuration ---
-    CONFIG_PATH = "./VQVAE/tuned_config.yaml"
-    ORIGINAL_DATA_PATH = "./VQVAE/models/tuned/original_data_after_preprocessing.csv"
-    ENCODED_DATA_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_5_70.csv"
-    MODEL_WEIGHTS_PATH = "./VQVAE/models/tuned/final_model.pth" 
-    SAVE_OUTPUT_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/reconstructed_final.csv"
+    CONFIG_PATH = "./VQVAE/tuned_config2.yaml"
+    ORIGINAL_DATA_PATH = "./VQVAE/models/tuned2/original_data_after_preprocessing.csv"
+    ENCODED_DATA_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_5_70.csv"
+    MODEL_WEIGHTS_PATH = "./VQVAE/models/tuned2/final_model.pth" 
+    SAVE_OUTPUT_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/reconstructed_final.csv"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

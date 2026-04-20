@@ -7,19 +7,15 @@ def train_vqvae(model, dataloader, device, optimizer, config):
     model.train()
     criterion_recon = nn.MSELoss()
     
-    # Create checkpoints directory if it doesn't exist
     checkpoint_dir = f"./models/{config['name']}/checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    # determine if this process should perform logging/checkpointing
     master_process = config.get('master_process', True)
 
-    # Optional WandB logging initialization (safe for non-interactive servers)
     if config.get('wandb_log', False) and master_process:
         try:
             import wandb
 
-            # Login for non-interactive environments (servers/LSF)
             wandb_api_key = os.environ.get('WANDB_API_KEY', None)
             if wandb_api_key:
                 print("Logging into W&B using WANDB_API_KEY environment variable...")
@@ -39,7 +35,6 @@ def train_vqvae(model, dataloader, device, optimizer, config):
             print(f"W&B import/init error: {e}")
             config['wandb_log'] = False
 
-    # Only ONE progress bar for the Epochs
     epoch_pbar = tqdm(range(config['number_of_epochs']), desc="Training Progress")
 
     for epoch in epoch_pbar:
@@ -49,45 +44,33 @@ def train_vqvae(model, dataloader, device, optimizer, config):
         total_commitment = 0
         total_codebook = 0
 
-        # Iterate normally without tqdm to prevent log flooding
         for batch_idx, x in enumerate(dataloader):
             x = x.to(device)
 
             optimizer.zero_grad()
 
-            # Forward pass
             x_recon, commitment_loss, codebook_loss, _ = model(x)
 
-            # Reconstruction Loss
             loss_recon = criterion_recon(x_recon, x)
-
-            # Embedding Loss (Equation 6) with configurable lambda weighting
-            # Scaled by sqrt(code_dim) to normalize for dimensionality
             loss_embed =  commitment_loss+ codebook_loss
-
-            # Total Loss
             loss = loss_recon + loss_embed
 
             loss.backward()
             optimizer.step()
 
-            # Track metrics
             total_loss += loss.item()
             total_recon += loss_recon.item()
             total_embed += loss_embed.item()
             total_commitment += commitment_loss.item()
             total_codebook += codebook_loss.item()
 
-        # Calculate epoch averages
         avg_loss = total_loss / len(dataloader)
         avg_recon = total_recon / len(dataloader)
         avg_embed = total_embed / len(dataloader)
         avg_commitment = total_commitment / len(dataloader)
         avg_codebook = total_codebook / len(dataloader)
 
-        # Print summary ONLY at the end of the epoch
         tqdm.write(f"Epoch [{epoch+1}/{config['number_of_epochs']}] | Loss: {avg_loss:.4f} | Recon: {avg_recon:.4f} | Embed: {avg_embed:.4f} | Commitment: {avg_commitment:.4f} | Codebook: {avg_codebook:.4f}")
-        # Log to WandB (if enabled)
         if config.get('wandb_log', False) and master_process:
             try:
                 import wandb
@@ -107,8 +90,6 @@ def train_vqvae(model, dataloader, device, optimizer, config):
                 )
             except Exception as e:
                 print(f"W&B logging error: {e}")
-        # --- CHECKPOINTING (Safety Save) ---
-        # Save every 5 epochs OR if it's the last epoch
         if (epoch + 1) % 5 == 0 or (epoch + 1) == config['number_of_epochs']:
             save_path = os.path.join(checkpoint_dir, f"vqvae_epoch_{epoch+1}.pt")
             torch.save({
@@ -118,7 +99,6 @@ def train_vqvae(model, dataloader, device, optimizer, config):
                 'loss': avg_loss,
             }, save_path)
             tqdm.write(f"--> Checkpoint saved: {save_path}")
-            # upload checkpoint to wandb run files (best-effort)
             if config.get('wandb_log', False) and master_process:
                 try:
                     import wandb
@@ -127,7 +107,6 @@ def train_vqvae(model, dataloader, device, optimizer, config):
                 except Exception as e:
                     print(f"W&B save error: {e}")
 
-    # Finish WandB run (if initialized)
     if config.get('wandb_log', False) and master_process:
         try:
             import wandb

@@ -6,19 +6,16 @@ from torch.utils.data import DataLoader, random_split
 import numpy as np
 import argparse
 
-# Import your modules
 from dataset import EMGDataset
 from evaluation import evaluate_model
 from model import SDformerVQVAE
 from train import train_vqvae
 from visualizer import Visualizer
 
-# Parse command line arguments
 parser = argparse.ArgumentParser(description='Run VQVAE pipeline')
 parser.add_argument('--config', type=str, required=True, help='Path to the config YAML file')
 args = parser.parse_args()
 
-# --- 1. Load Config & Setup Directories ---
 with open(args.config, "r") as file:
     config = yaml.safe_load(file)
 
@@ -31,7 +28,6 @@ with open(os.path.join(save_dir, "config.yaml"), "w") as file:
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Pipeline initialized on {device}. Saving results to: {save_dir}")
 
-# --- 2. Initialize Full Dataset ---
 full_dataset = EMGDataset(window_size=config['window_size'], stride=config['stride'])
 full_dataset.save_df(os.path.join(save_dir, "original_data_after_preprocessing.csv")) 
 print(f"Full dataset loaded with {len(full_dataset)} samples. DataFrame saved for reference.")
@@ -45,7 +41,7 @@ train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 print(f"Data Split: {len(train_dataset)} Training | {len(val_dataset)} Validation")
 
 # Create DataLoaders
-# Drop_last=True is important for batch norm stability in VQ-VAE
+
 train_loader = DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True, drop_last=True)
 val_loader = DataLoader(val_dataset, batch_size=config['batch_size'], shuffle=False, drop_last=True)
 

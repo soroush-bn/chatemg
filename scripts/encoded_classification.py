@@ -9,7 +9,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import yaml
 import os
 
-from VQVAEmodel import SDformerVQVAE
+from VQVAE.model import SDformerVQVAE
 
 class CNNClassifier(nn.Module):
     def __init__(self, code_dim=32, num_classes=17):
@@ -227,35 +227,35 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
     print(f"Average Recall:    {avg_rec:.2f}%")
     print(f"Average F1-Score:  {avg_f1:.2f}%")
 if __name__ == "__main__":
-    CONFIG_PATH = "./VQVAE/models/tuned/config.yaml" 
-    VQVAE_WEIGHTS = "./VQVAE/models/tuned/final_model.pth"
+    CONFIG_PATH = "./VQVAE/models/tuned2/config.yaml" 
+    VQVAE_WEIGHTS = "./VQVAE/models/tuned2/final_model.pth"
     ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/data/encoded_df.csv"
     
     classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_70_5.csv"
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_70_5.csv"
     print("\n\nNow evaluating on the synthetic dataset with 70% real and 5% synthetic tokens...")
     classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
 
 
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_60_15.csv"
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_60_15.csv"
     print("\n\nNow evaluating on the synthetic dataset with 60% real and 15% synthetic tokens...")
     classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
 
 
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_50_25.csv"
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_50_25.csv"
     print("\n\nNow evaluating on the synthetic dataset with 50% real and 25% synthetic tokens...")
     classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
 
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_50_25.csv"
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_50_25.csv"
     print("\n\nNow evaluating on the synthetic dataset with 50% real and 25% synthetic tokens...")
     classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
 
     
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_25_50.csv"
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_25_50.csv"
     print("\n\nNow evaluating on the synthetic dataset with 25% real and 50% synthetic tokens...")
     classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
 
     
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/synthetic_df_5_70.csv"
+    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_5_70.csv"
     print("\n\nNow evaluating on the synthetic dataset with 5% real and 70% synthetic tokens...")
     classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)

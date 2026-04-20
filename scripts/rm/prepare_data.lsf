@@ -1,0 +1,35 @@
+#!/bin/bash
+#BSUB -J prepare_data
+#BSUB -n 4
+#BSUB -o ./outs/%J.out
+#BSUB -e ./errors/%J.err
+#BSUB -q large_memory
+
+set -euo pipefail
+
+echo "========================================="
+echo "Job started at: $(date)"
+echo "Job ID: $LSB_JOBID"
+echo "Running on host: $(hostname)"
+echo "========================================="
+
+module purge
+module load miniconda/pytorch-tensorflow-gpu-2024.09
+
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate buildrust
+
+echo "========================================="
+echo "Starting data preparation..."
+echo "========================================="
+
+python prepare_data_for_train.py
+
+EXIT_CODE=$?
+
+echo "========================================="
+echo "Job finished at: $(date)"
+echo "Exit code: $EXIT_CODE"
+echo "========================================="
+
+exit $EXIT_CODE

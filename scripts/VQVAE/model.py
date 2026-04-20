@@ -12,11 +12,10 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
         self.epsilon = epsilon
         self.lambda_loss = lambda_loss
         
-        # Initialize embeddings uniformly
         embedding = torch.randn(num_embeddings, embedding_dim)
         self.register_buffer('embedding', embedding / embedding.norm(dim=1, keepdim=True))
         
-        # ALSO store unnormalized embeddings for loss computation
+        # store unnormalized embeddings for loss computation
         # This allows MSE loss to have meaningful gradients
         self.register_buffer('embedding_unnormalized', embedding.clone())
         
@@ -30,11 +29,8 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
     def init_codebook(self, flat_input, flat_input_unnormalized):
         """Initialize codebook using random selection from the first batch of data"""
         print("Initializing codebook with K-means++ strategy (random data selection)...")
-        # Select K random vectors from the input batch to be the starting codebook
-        # This ensures the codes start ON the data manifold, not in random space
         indices = torch.randperm(flat_input.size(0))[:self.num_embeddings]
         
-        # If batch is smaller than codebook, we repeat
         if len(indices) < self.num_embeddings:
             indices = indices.repeat((self.num_embeddings // len(indices)) + 1)[:self.num_embeddings]
             
@@ -47,7 +43,7 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
         self.init = True
 
     def forward(self, inputs):
-        # ... [Previous pre-processing code] ...
+        # ... [Previous pre-processing code] ...????
         inputs = inputs.permute(0, 2, 1).contiguous()
         input_shape = inputs.shape
         flat_input = inputs.view(-1, self.embedding_dim)
@@ -55,23 +51,21 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
         # Store unnormalized input for loss computation
         flat_input_unnormalized = flat_input.clone()
         
-        # NORMALIZE INPUT for similarity computation
         flat_input_norm = F.normalize(flat_input, p=2, dim=1)
         
-        # --- 1. DATA-DEPENDENT INITIALIZATION (Crucial Fix) ---
         if self.training and not self.init:
             self.init_codebook(flat_input_norm, flat_input_unnormalized)
             
-        # --- Similarity Calculation (on normalized vectors) ---
-        distances = torch.matmul(flat_input_norm, self.embedding.t())
+        distances = torch.matmul(flat_input_norm, self.embedding.t())  #Z_e(x) * e_j / (||z_e(x)|| * ||e_j||) but we already normalized both, so it's just dot product
         
-        # --- Quantization ---
+        # q(z|x)
         encoding_indices = torch.argmax(distances, dim=1)
         encodings = F.one_hot(encoding_indices, self.num_embeddings).float()
+        # z_q(x) = e_j where j = argmax sim(z_e(x), e_j)
         quantized = torch.matmul(encodings, self.embedding)
         quantized = quantized.view(input_shape)
         
-        # --- EMA Update with Dead Code Revival ---
+        # EMA Update with Dead Code Revival
         if self.training:
             cluster_size = encodings.sum(0)
             updated_ema_w = torch.matmul(encodings.t(), flat_input_norm)
@@ -81,7 +75,7 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
             self.ema_w.data.mul_(self.decay).add_(updated_ema_w, alpha=1 - self.decay)
             self.ema_w_unnormalized.data.mul_(self.decay).add_(updated_ema_w_unnormalized, alpha=1 - self.decay)
             
-            # --- CODE RESET (The Paper's Fix) ---
+            # code reset
             # Identify codes that have very low usage (< 1.0 means used less than once on average)
             # We re-initialize them to random encoder outputs from the current batch
             dead_codes = self.ema_cluster_size < 1.0
@@ -111,16 +105,16 @@ class SimilarityDrivenVectorQuantizer(nn.Module):
             # Keep unnormalized version in sync for loss computation
             self.embedding_unnormalized.data.copy_(self.ema_w_unnormalized / cluster_size_smoothed.unsqueeze(1))
 
-        # --- COMMITMENT LOSS (on UNNORMALIZED vectors for proper gradients) ---
+        # commitment loss on unnormalized vectors for meaningful gradients
         # This loss penalizes the encoder for not committing to the quantized codes
         # Equation: ||z_e(x) - sg[e]||^2 where sg = stop gradient
         commitment_loss = F.mse_loss(flat_input_unnormalized, self.embedding_unnormalized[encoding_indices].detach())
         
-        # --- CODEBOOK LOSS (encourages embeddings to track encoder outputs) ---
+        # codebook loss
         # Equation: ||sg[z_e(x)] - e||^2
         codebook_loss = F.mse_loss(self.embedding_unnormalized[encoding_indices], flat_input_unnormalized.detach())
         
-        # Return losses separately for flexible weighting in training loop
+
         quantized = inputs + (quantized - inputs).detach()
         return quantized.permute(0, 2, 1), commitment_loss, codebook_loss, encoding_indices
     
@@ -154,18 +148,15 @@ class ResNetBlock1D(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
-        # Architecture per Table 9
+        # Architecture as Table 9 of SDformer paper. 
 
-        # Layer 1: Conv1D (in=d, out=D)
         self.layer1 = nn.Sequential(
             nn.Conv1d(input_dim, hidden_dim, kernel_size=3, stride=1, padding=1),
             nn.ReLU()
         )
 
-        # Layer 2: Downsample 1
         self.layer2 = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=4, stride=2, padding=1)
 
-        # Layer 3: ResNet
         self.layer3 = nn.Sequential(
             ResNetBlock1D(hidden_dim, dilation=1),
             ResNetBlock1D(hidden_dim, dilation=3), # Depth=3 dilation growth? interpreted as blocks
@@ -173,10 +164,8 @@ class Encoder(nn.Module):
             nn.ReLU()
         )
 
-        # Layer 4: Downsample 2
         self.layer4 = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=4, stride=2, padding=1)
 
-        # Layer 5: ResNet (Same as layer 3)
         self.layer5 = nn.Sequential(
             ResNetBlock1D(hidden_dim, dilation=1),
             ResNetBlock1D(hidden_dim, dilation=3),
@@ -184,12 +173,7 @@ class Encoder(nn.Module):
             nn.ReLU()
         )
 
-        # Layer 6: Final projection (in=D, out=output_dim/code_dim)
-        # Allows hidden_dim (e.g., 512) to be different from code_dim (e.g., 64)
         self.layer6 = nn.Conv1d(hidden_dim, output_dim, kernel_size=3, stride=1, padding=1)
-
-        # Normalization output layer (Eq 3 mentions h_i is unit modulus)
-        # We handle this inside the VQ module, but the encoder outputs raw logits/vectors
 
     def forward(self, x):
         x = self.layer1(x)
@@ -205,13 +189,11 @@ class Decoder(nn.Module):
         super().__init__()
         # Architecture per Table 10
 
-        # Layer 1: Conv1D (in=input_dim/code_dim, out=D)
         self.layer1 = nn.Sequential(
             nn.Conv1d(input_dim, hidden_dim, kernel_size=3, stride=1, padding=1),
             nn.ReLU()
         )
 
-        # Layer 2: ResNet
         self.layer2 = nn.Sequential(
             ResNetBlock1D(hidden_dim, dilation=1),
             ResNetBlock1D(hidden_dim, dilation=3),
@@ -219,11 +201,9 @@ class Decoder(nn.Module):
             nn.ReLU()
         )
 
-        # Layer 3: Upsample 1 (Upsample + Conv)
         self.layer3_up = nn.Upsample(scale_factor=2, mode='nearest')
         self.layer3_conv = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1)
 
-        # Layer 4: ResNet
         self.layer4 = nn.Sequential(
             ResNetBlock1D(hidden_dim, dilation=1),
             ResNetBlock1D(hidden_dim, dilation=3),
@@ -231,11 +211,9 @@ class Decoder(nn.Module):
             nn.ReLU()
         )
 
-        # Layer 5: Upsample 2
         self.layer5_up = nn.Upsample(scale_factor=2, mode='nearest')
         self.layer5_conv = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1)
 
-        # Layer 6: Final Refinement
         self.layer6 = nn.Sequential(
             nn.ReLU(),
             nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, stride=1, padding=1),
@@ -257,7 +235,6 @@ class Decoder(nn.Module):
 class SDformerVQVAE(nn.Module):
     def __init__(self, config):
         super().__init__()
-        # Pass explicit dimensions to support mismatched hidden/code dims
         self.encoder = Encoder(
             input_dim=config['input_dim'], 
             hidden_dim=config['hidden_dim'],
@@ -278,13 +255,7 @@ class SDformerVQVAE(nn.Module):
         )
 
     def forward(self, x):
-        # 1. Encode
         z = self.encoder(x)
-
-        # 2. Quantize (Similarity Driven)
         z_quantized, commitment_loss, codebook_loss, indices = self.quantizer(z)
-
-        # 3. Decode
         x_recon = self.decoder(z_quantized)
-
         return x_recon, commitment_loss, codebook_loss, indices

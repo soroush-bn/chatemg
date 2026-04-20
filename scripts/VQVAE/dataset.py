@@ -5,6 +5,7 @@ import pandas as pd
 import yaml 
 import os 
 from sklearn.preprocessing import StandardScaler
+from scipy.signal import butter, filtfilt, iirnotch
 
 # Load config once
 with open("vqvae_config.yaml", "r") as file:
@@ -18,11 +19,12 @@ label_mapping = {
 }
 
 class EMGDataset(Dataset):
-    def __init__(self, window_size=300, stride=1):
+    def __init__(self, window_size=300, stride=1, fs=2000):
         if stride < 1:
             raise ValueError("stride must be >= 1")
         self.window_size = window_size
         self.stride = stride
+        self.fs = fs
         self.df = None 
 
         print("Initializing Dataset... (This forces a fresh load of all data)")
@@ -30,6 +32,25 @@ class EMGDataset(Dataset):
         
         print(f"Dataset Ready. Total Samples: {len(self.data)}")
         print(f"Tensor Stats -> Mean: {self.data.mean():.4f}, Std: {self.data.std():.4f}")
+
+    def _apply_filters(self, data):
+        """
+        Apply Bandpass (20-450Hz) and Notch (50Hz) filters.
+        """
+        nyq = 0.5 * self.fs
+        
+        # 1. Bandpass Filter (20-450Hz)
+        low = 20 / nyq
+        high = 450 / nyq
+        b, a = butter(4, [low, high], btype='band')
+        data = filtfilt(b, a, data, axis=0)
+        
+        # 2. Notch Filter (50Hz)
+        # Quality factor Q = 30 is standard for notch filters
+        b_notch, a_notch = iirnotch(50 / nyq, 30)
+        data = filtfilt(b_notch, a_notch, data, axis=0)
+        
+        return data
 
     def _load_and_normalize_all(self):
         """
@@ -60,6 +81,9 @@ class EMGDataset(Dataset):
 
                 emg_cols = [c for c in df.columns if 'emg' in c.lower()]
                 
+                # Apply Frequency Filtering
+                df[emg_cols] = self._apply_filters(df[emg_cols].values)
+                
                 cols_to_keep = emg_cols + (['gt'] if 'gt' in df.columns else [])
                 
                 df_filtered = df[cols_to_keep].copy()
@@ -80,7 +104,7 @@ class EMGDataset(Dataset):
         data_values = full_df[emg_cols].values
         
         np_data = scaler.fit_transform(data_values)
-        #assign scaled data back to df for potential future use
+        
         full_df[emg_cols] = np_data
         self.df = full_df
         return torch.tensor(np_data, dtype=torch.float32)

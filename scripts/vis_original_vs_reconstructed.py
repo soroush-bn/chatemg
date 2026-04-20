@@ -88,7 +88,7 @@ def visualize_gesture_reconstruction(original_path, reconstructed_path, save_dir
 
 if __name__ == "__main__":
     # Update these paths to your actual file locations
-    ORIG_PATH = "./VQVAE/models/tuned/original_data_after_preprocessing.csv"
-    RECON_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/encoded_test_small/reconstructed_final.csv"
+    ORIG_PATH = "./VQVAE/models/tuned2/original_data_after_preprocessing.csv"
+    RECON_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/reconstructed_final.csv"
     
     visualize_gesture_reconstruction(ORIG_PATH, RECON_PATH)

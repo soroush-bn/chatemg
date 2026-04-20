@@ -107,7 +107,7 @@ class Block(nn.Module):
 class GPTConfig:
     block_size: int = 75       # Max sequence length (matching the 75 tokens in encoded_df)
     vocab_size: int = 512      # Codebook size of the VQ-VAE (adjust if different)
-    num_classes: int = 20      # Number of unique 'gt' classes (adjust to your dataset)
+    num_classes: int = 17      # Number of unique 'gt' classes (adjust to your dataset)
     n_layer: int = 8           # Number of transformer blocks
     n_head: int = 8            # Number of attention heads
     n_embd: int = 512          # Embedding dimension

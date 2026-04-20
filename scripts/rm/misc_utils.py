@@ -1,0 +1,225 @@
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from scipy.signal import medfilt, butter, filtfilt
+import seaborn as sns
+from matplotlib.lines import Line2D
+import matplotlib.font_manager
+from scipy.signal import resample_poly
+from scipy.signal import butter, filtfilt
+
+
+def plot_emg_chunks_parallel(
+    real_data,
+    synthetic_data,
+    nrows=1,
+    ncols=1,
+    vertical_location=None,
+    flatten=False,
+    rmse=None,
+    save_fnm=None,
+    save_dir=None
+):
+    """
+    new plotting function that puts real and synthetic data in parallel.
+
+    real_data: (b, t, 8)
+    synthetic_data: (b, t, 8)
+    b = nrows * ncols
+    rmse: (b, )
+    """
+
+    # putting real and synthetic in parallel
+    nrows = nrows * 2
+
+    # missing the batch dimension
+    if np.ndim(real_data) == 2 and not flatten:
+        real_data = real_data[None, ...]
+    b, t, num_channels = real_data.shape
+    if flatten:
+        real_data = real_data.reshape(b, -1, num_channels)
+        t = real_data.shape[1]
+    fig, axs = plt.subplots(figsize=(15, 12), nrows=nrows, ncols=ncols, squeeze=False)
+
+    idx = np.array(range(t)) / 100.0
+    colors = ["b", "g", "r", "c", "m", "y", "k", "tab:brown"]
+
+    for i in range(nrows):
+        for j in range(ncols):
+            for c in range(num_channels):
+                if i % 2 == 0:
+                    y = real_data[i // 2 * ncols + j, :, c]
+                    axs[i, j].set_ylabel("real")
+                else:
+                    y = synthetic_data[i // 2 * ncols + j, :, c]
+                    axs[i, j].set_ylabel("synthetic")
+                    axs[i, j].set_xlabel(f"rmse: {rmse[i // 2 * ncols + j]:.2f}")
+                axs[i, j].plot(idx, y, label=f"emg{c}", alpha=0.7, color=colors[c])
+                if vertical_location is not None:
+                    axs[i, j].axvline(x=vertical_location / 100.0, c="b")
+
+    # if 'motor_position' in df.columns:
+    #     plt.plot(idx, motor_position, 'tab:grey', label='motor')
+    # plt.plot(idx, gt, 'tab:orange', label='gt')
+
+    plt.tight_layout()
+    # only plot the legend on the last plot
+    # handles, labels = axs[-1, -1].get_legend_handles_labels()
+    # fig.legend(handles, labels)
+    if save_fnm is not None:
+        name = os.path.join(save_dir, save_fnm) if save_dir is not None else save_fnm
+        plt.savefig(name, dpi=300, bbox_inches="tight")
+    plt.show()
+
+
+def get_batch(
+    split, train_data_list, test_data_list, batch_size, block_size, device_type, device
+):
+    data_list = train_data_list if split == "train" else test_data_list
+    num_per_list = np.round(
+        np.array([len(a) for a in data_list])
+        / sum([len(a) for a in data_list])
+        * batch_size
+    ).astype(int)
+    num_per_list[-1] = batch_size - sum(num_per_list[:-1])
+    x = []
+    y = []
+    for idx, num in enumerate(num_per_list):
+        ix = torch.randint(len(data_list[idx]) - block_size, (num,))
+        # TODO normalizing the emg signals???
+        x = x + [
+            torch.from_numpy((data_list[idx][i : i + block_size]).astype(np.float32))
+            for i in ix
+        ]
+        y = y + [
+            torch.from_numpy(
+                (data_list[idx][i + 1 : i + 1 + block_size]).astype(np.int64)
+            )
+            for i in ix
+        ]
+    x = torch.stack(x)
+    y = torch.stack(y)
+    if device_type == "cuda":
+        # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
+        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
+            device, non_blocking=True
+        )
+    else:
+        x, y = x.to(device), y.to(device)
+    return x, y
+
+
+def clean_dataframe(df,vocab_size, sensor_type,location="both"):
+    assert 'gt' in df.columns, "Ground truth 'gt' column not found in dataframe."
+    assert sensor_type in ['emg', 'imu'], "sensor_type must be either 'emg' or 'imu'"
+    assert location in ['both', 'forearm', 'wrist'], "location must be either 'both', 'forearm', or 'wrist'"
+    assert len(df["gt"].unique()) == 17, "Ground truth 'gt' len is 17"
+    if location == "both":
+        X_df = keep_columns(df, [sensor_type]).copy()
+    elif location == "forearm":
+        if sensor_type == "emg":
+            X_df = keep_columns(df, ["1","2","3","4"]).copy()
+        else:
+            X_df = keep_columns(df, [f"{sensor_type}_1",f"{sensor_type}_2",f"{sensor_type}_3",f"{sensor_type}_4"]).copy()
+    elif location == "wrist":
+        if sensor_type == "emg":
+            X_df = keep_columns(df, ["5","6","7","8"]).copy()
+        else:
+            X_df = keep_columns(df, [f"{sensor_type}_5",f"{sensor_type}_6",f"{sensor_type}_7",f"{sensor_type}_8"]).copy()
+
+    if X_df.empty or len(X_df.columns) == 0:
+        raise ValueError(
+            f"No columns found matching sensor_type '{sensor_type}'. "
+            f"Available columns: {list(df.columns)}. "
+            f"Please check that the sensor_type matches the columns in your CSV file."
+        )
+
+    for col in X_df.columns:
+        col_min = X_df[col].min()
+        col_max = X_df[col].max()
+        if col_max != col_min:
+            X_df[col] = (X_df[col] - col_min) * vocab_size / (col_max - col_min)
+        else:
+            X_df[col] = 0  
+
+    X = X_df.to_numpy().astype('int64')
+
+    y_df = keep_columns(df, ["gt"])
+    y = y_df.to_numpy().squeeze()
+
+    return X, y
+
+
+def keep_columns(df, tuple_of_columns):
+    """
+    Given a dataframe, and a tuple of column names, this function will search
+    through the dataframe and keep only columns which contain a string from the
+    list of the desired columns. All other columns are removed
+    """
+    if len(tuple_of_columns) >= 1:
+        cols = df.columns[
+            df.columns.to_series().str.contains("|".join(tuple_of_columns))
+        ]
+        return df[cols]
+    return df
+
+
+def medfilt_wo_padding(arr, window_size):
+    """
+    built on scipy medial filter which filters using the current element as center and with 0 paddings.
+    This function has no padding, so the length will be shortened.
+
+    arr: (b, t, c)
+    window_size must be odd
+    """
+    if window_size == 1:
+        return arr
+    s = int((window_size - 1) / 2)
+    e = -s
+    return medfilt(arr, [1, window_size, 1])[:, s:e, :]
+
+# def 
+
+def sample_from_dataset(dataset, num, replace=False):
+    # sample some samples without replacement
+    # This sample 8-channel signals not separate channel signals
+    idx = np.random.choice(range(len(dataset)), num, replace=replace)
+    X = []
+    Y = []
+    for i in idx:
+        x, y = dataset[i]
+        X.append(x)
+        Y.append(y)
+    return np.stack(X), np.stack(Y)
+
+
+def compute_mse(y, y_hat, starting_pos):
+    """
+    y: np array (n, 256, 8)
+    y_hat: np array (n, 256, 8)
+    return: np array (n, )
+    """
+    return ((y[:, starting_pos:, :] - y_hat[:, starting_pos:, :]) ** 2).mean(
+        axis=(1, 2)
+    )
+
+def downsample_with_proper_filter(df, factor=2):
+    """Downsample with proper low-pass anti-aliasing filter that preserves label alignment"""
+    
+    nyquist_freq = 0.5 / factor 
+    b, a = butter(N=4, Wn=nyquist_freq, btype='low', analog=False)
+    
+    data_array = df.values
+    filtered_data = np.zeros_like(data_array)
+    
+    for ch in range(data_array.shape[1]):
+        if df.columns[ch] == 'gt' or df.dtypes[ch] == 'object':
+            filtered_data[:, ch] = data_array[:, ch]
+        else:
+            filtered_data[:, ch] = filtfilt(b, a, data_array[:, ch])
+    
+    decimated_data = filtered_data[::factor]
+    
+    return pd.DataFrame(decimated_data, columns=df.columns)

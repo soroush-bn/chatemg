@@ -6,9 +6,8 @@ import numpy as np
 import pandas as pd
 import yaml
 
-# Import your VQ-VAE architecture
-# Make sure your vqvae_model.py is in the same directory, or adjust the import
-from VQVAEmodel import SDformerVQVAE
+# Link to the main VQ-VAE model implementation
+from VQVAE.model import SDformerVQVAE
 
 class VQVAESignalDecoder:
     def __init__(self, vqvae_model_path, vqvae_config, device="cuda"):

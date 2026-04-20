@@ -127,11 +127,24 @@ else:
 if master_process:
     print(f"number of training samples: {len(train_dataset)}, number of test samples: {len(test_dataset)}")
 
+
+train_iter = iter(train_dataloader)
+test_iter = iter(test_dataloader)
+
 def get_batch(split):
+    global train_iter, test_iter
     if split == "train":
-        return next(iter(train_dataloader))
+        try:
+            return next(train_iter)
+        except StopIteration:
+            train_iter = iter(train_dataloader)
+            return next(train_iter)
     elif split == "val":
-        return next(iter(test_dataloader))
+        try:
+            return next(test_iter)
+        except StopIteration:
+            test_iter = iter(test_dataloader)
+            return next(test_iter)
 
 iter_num = 0
 best_val_loss = 1e9
@@ -145,7 +158,7 @@ model_args = dict(
     n_embd=config.get('n_embd', 512),
     block_size=config.get('block_size', 75),  # Sequence length matches tokenized cols
     vocab_size=config.get('vocab_size', 512), # Codebook size
-    num_classes=config.get('num_classes', 20), # Number of unique gestures
+    num_classes=config.get('num_classes', 17), # Number of unique gestures
     dropout=config.get('dropout', 0.1),
     bias=config.get('bias', True)
 )
@@ -243,16 +256,27 @@ def get_lr(it):
 
 
 if config.get('wandb_log', False) and master_process:
-    import wandb
-    wandb_api_key = os.environ.get('WANDB_API_KEY', None)
-    if wandb_api_key:
-        wandb.login(key=wandb_api_key)
-    else:
-        try:
-            wandb.login()
-        except Exception:
-            pass
-    wandb.init(project=config.get('wandb_project_name', 'chatemg'), name=exp_name, config=config)
+    try:
+        import wandb
+
+        wandb_api_key = os.environ.get('WANDB_API_KEY', None)
+        if wandb_api_key:
+            print("Logging into W&B using WANDB_API_KEY environment variable...")
+            wandb.login(key=wandb_api_key)
+        else:
+            print("Warning: WANDB_API_KEY not found. Attempting to use cached credentials...")
+            try:
+                wandb.login()
+            except Exception as e:
+                print(f"W&B login failed: {e}")
+                print("Please set WANDB_API_KEY environment variable or run 'wandb login' manually")
+                config['wandb_log'] = False
+
+        if config.get('wandb_log', False):
+            wandb.init(project=config.get('wandb_project_name', 'transformer'), name=exp_name, config=config)
+    except Exception as e:
+        print(f"W&B import/init error: {e}")
+        config['wandb_log'] = False
 
 X, Y, labels = get_batch("train")
 X, Y, labels = X.to(device), Y.to(device), labels.to(device)
@@ -308,10 +332,18 @@ while True:
                     "optimizer": optimizer.state_dict(),
                 }
                 checkpoint.update(info)
-                print(f"saving checkpoint to {os.path.join(save_dir, folder_nm)}")
-                torch.save(checkpoint, os.path.join(save_dir, folder_nm, "ckpt.pt"))
+                ckpt_save_path = os.path.join(save_dir, folder_nm, "ckpt.pt")
+                print(f"saving checkpoint to {ckpt_save_path}")
+                torch.save(checkpoint, ckpt_save_path)
                 with open(os.path.join(save_dir, folder_nm, "info.yml"), "w") as yaml_file:
                     yaml.dump(info, yaml_file, default_flow_style=False)
+                
+                if config.get('wandb_log', False) and master_process:
+                    try:
+                        import wandb
+                        wandb.save(ckpt_save_path)
+                    except Exception as e:
+                        print(f"W&B save error: {e}")
 
     if iter_num == 0 and config.get('eval_only', False):
         break
@@ -355,3 +387,10 @@ while True:
 
 if ddp:
     dist.destroy_process_group()
+
+if config.get('wandb_log', False) and master_process:
+    try:
+        import wandb
+        wandb.finish()
+    except Exception as e:
+        print(f"W&B finish error: {e}")
