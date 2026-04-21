@@ -11,7 +11,7 @@ from encoded_model import GPTConfig, ConditionedGPT
 
 def run_batch_generation():
     # 1. Setup & Config
-    config_path = './configs/encoded_config2.yaml'
+    config_path = './configs/replicate_small.yaml'
     print(f"Reading config from: {config_path}")
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
