@@ -26,18 +26,22 @@ echo "Stage 2 submitted with ID: $JOB2_ID"
 # Can run after Stage 2.
 JOB3_CMD="bsub -w \"done($JOB2_ID)\" -env \"CONFIG=/gpfs/home/sbaghernezha/projects/chatemg/chatemg/scripts/configs/replicate_small.yaml\" -J replicate_samplevis -q gpu -gpu \"num=1\" -o ./outs/%J.out -e ./errors/%J.err < samplevis.lsf"
 echo "Submitting Stage 3: Sample Visualization (waiting for $JOB2_ID)..."
-eval $JOB3_CMD
+JOB3_OUT=$(eval $JOB3_CMD)
+JOB3_ID=$(echo $JOB3_OUT | grep -oP '(?<=Job <)\d+(?=>)')
+echo "Stage 3 submitted with ID: $JOB3_ID"
 
 # 4. Create Encoded Reconstruction
 # Uses the trained Transformer to generate/reconstruct signals.
-JOB4_CMD="bsub -w \"done($JOB2_ID)\" -J replicate_reconstruction -q gpu -gpu \"num=1\" -o ./outs/%J.out -e ./errors/%J.err < create_encoded_reconstruction.lsf"
-echo "Submitting Stage 4: Signal Reconstruction (waiting for $JOB2_ID)..."
-eval $JOB4_CMD
+JOB4_CMD="bsub -w \"done($JOB3_ID)\" -J replicate_reconstruction -q gpu -gpu \"num=1\" -o ./outs/%J.out -e ./errors/%J.err < create_encoded_reconstruction.lsf"
+echo "Submitting Stage 4: Signal Reconstruction (waiting for $JOB3_ID)..."
+JOB4_OUT=$(eval $JOB4_CMD)
+JOB4_ID=$(echo $JOB4_OUT | grep -oP '(?<=Job <)\d+(?=>)')
+echo "Stage 4 submitted with ID: $JOB4_ID"
 
 # 5. Encoded Classification & Cross-Domain Validation
 # Final step of the pipeline.
-JOB5_CMD="bsub -w \"done($JOB2_ID)\" -J replicate_classification -q gpu -gpu \"num=1\" -o ./outs/%J.out -e ./errors/%J.err < encoded_classify.lsf"
-echo "Submitting Stage 5: Classification (waiting for $JOB2_ID)..."
+JOB5_CMD="bsub -w \"done($JOB4_ID)\" -J replicate_classification -q gpu -gpu \"num=1\" -o ./outs/%J.out -e ./errors/%J.err < encoded_classify.lsf"
+echo "Submitting Stage 5: Classification (waiting for $JOB4_ID)..."
 eval $JOB5_CMD
 
 echo "=========================================================="
