@@ -10,6 +10,10 @@
 # JOB1_ID=$(echo $JOB1_OUT | grep -oP '(?<=Job <)\d+(?=>)')
 # echo "Stage 1 submitted with ID: $JOB1_ID"
 
+# Copy encoded data to the expected location for Stage 2
+echo "Copying encoded data from VQ-VAE output..."
+cp /home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/tuned2/encoded_df.csv ../data/encoded_df.csv
+
 # 2. Train Gesture Transformer (Phase 2)
 # Stage 1 completed successfully, starting from Stage 2.
 JOB2_CMD="bsub -env \"CONFIG=/gpfs/home/sbaghernezha/projects/chatemg/chatemg/scripts/configs/replicate_small.yaml\" -J replicate_run -q gpu -gpu \"num=1\" -o ./outs/%J.out -e ./errors/%J.err < encoded_run.lsf"
