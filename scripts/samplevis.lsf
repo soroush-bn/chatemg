@@ -39,6 +39,6 @@ echo "last step"
 
 sleep 10
 nvidia-smi
-python encoded_visualizer.py --config "$CONFIG"
+python encoded_visualizer.py --config "$CONFIG" --vqvae_config "$VQ_CONFIG"
 
 

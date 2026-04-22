@@ -22,5 +22,5 @@ NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 echo "Number of GPUs detected: $NUM_GPUS"
 
 
-python encoded_generation.py 
+python encoded_generation.py --config "$CONFIG" 
 

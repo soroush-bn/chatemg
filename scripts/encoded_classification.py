@@ -226,36 +226,48 @@ def classification_pipeline(encoded_df_path, config_path, vqvae_weights_path):
     print(f"Average Precision: {avg_prec:.2f}%")
     print(f"Average Recall:    {avg_rec:.2f}%")
     print(f"Average F1-Score:  {avg_f1:.2f}%")
+import argparse
+
 if __name__ == "__main__":
-    CONFIG_PATH = "./VQVAE/models/tuned2/config.yaml" 
-    VQVAE_WEIGHTS = "./VQVAE/models/tuned2/final_model.pth"
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, required=True, help="Path to Transformer config (replicate_small.yaml)")
+    parser.add_argument('--vqvae_config', type=str, required=True, help="Path to VQ-VAE config (tuned_config2.yaml)")
+    args = parser.parse_args()
+
+    # Load configs to derive paths
+    with open(args.config, 'r') as f:
+        tr_config = yaml.safe_load(f)
+    with open(args.vqvae_config, 'r') as f:
+        vq_config = yaml.safe_load(f)
+
+    exp_name = tr_config['exp_name']
+    vq_name = vq_config['name'] # e.g., "tuned2"
+
+    # Derive weights path (assuming standard structure)
+    VQVAE_WEIGHTS = f"./VQVAE/models/{vq_name}/final_model.pth"
+    
+    # Base data directory
+    base_model_dir = f"/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/{exp_name}"
+
+    # Real data path
     ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/data/encoded_df.csv"
     
-    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_70_5.csv"
-    print("\n\nNow evaluating on the synthetic dataset with 70% real and 5% synthetic tokens...")
-    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
+    print(f"--- Starting Classification Pipeline for Experiment: {exp_name} ---")
+    classification_pipeline(ENCODED_DF_PATH, args.vqvae_config, VQVAE_WEIGHTS)
 
+    # List of synthetic datasets to evaluate
+    synth_files = [
+        "synthetic_df_70_5.csv",
+        "synthetic_df_60_15.csv",
+        "synthetic_df_50_25.csv",
+        "synthetic_df_25_50.csv",
+        "synthetic_df_5_70.csv"
+    ]
 
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_60_15.csv"
-    print("\n\nNow evaluating on the synthetic dataset with 60% real and 15% synthetic tokens...")
-    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
-
-
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_50_25.csv"
-    print("\n\nNow evaluating on the synthetic dataset with 50% real and 25% synthetic tokens...")
-    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
-
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_50_25.csv"
-    print("\n\nNow evaluating on the synthetic dataset with 50% real and 25% synthetic tokens...")
-    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
-
-    
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_25_50.csv"
-    print("\n\nNow evaluating on the synthetic dataset with 25% real and 50% synthetic tokens...")
-    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
-
-    
-    ENCODED_DF_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_5_70.csv"
-    print("\n\nNow evaluating on the synthetic dataset with 5% real and 70% synthetic tokens...")
-    classification_pipeline(ENCODED_DF_PATH, CONFIG_PATH, VQVAE_WEIGHTS)
+    for s_file in synth_files:
+        full_path = os.path.join(base_model_dir, s_file)
+        if os.path.exists(full_path):
+            print(f"\n\nEvaluating on synthetic dataset: {s_file}")
+            classification_pipeline(full_path, args.vqvae_config, VQVAE_WEIGHTS)
+        else:
+            print(f"Skipping {s_file} - Not found at {full_path}")

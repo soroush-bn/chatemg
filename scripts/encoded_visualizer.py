@@ -15,8 +15,6 @@ faulthandler.enable()
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-# Import the decoder class we just created
-
 def plot_synthetic_signals(signals, labels, save_path, max_plots=9):
     """
     Creates a grid plot of the generated multi-channel signals.
@@ -32,6 +30,7 @@ def plot_synthetic_signals(signals, labels, save_path, max_plots=9):
     axes = axes.flatten()
     
     for i in range(num_samples):
+        if i >= num_samples: break
         ax = axes[i]
         signal = signals[i]  # Shape: (TimeSteps, Channels)
         label = labels[i]
@@ -42,15 +41,13 @@ def plot_synthetic_signals(signals, labels, save_path, max_plots=9):
             ax.plot(signal[:, c], label=f'Ch {c+1}', alpha=0.8, linewidth=1.5)
             
         ax.set_title(f"Synthetic Gesture Class: {label}")
-        ax.set_xlabel("Time Steps")
-        ax.set_ylabel("Amplitude")
+        # ax.set_xlabel("Time Steps")
+        # ax.set_ylabel("Amplitude")
         ax.grid(True, linestyle='--', alpha=0.6)
         
-        # Only add legend to the first subplot to save space
         if i == 0:
             ax.legend(loc='upper right', fontsize='small')
 
-    # Hide any unused subplots
     for j in range(num_samples, len(axes)):
         fig.delaxes(axes[j])
         
@@ -61,10 +58,9 @@ def plot_synthetic_signals(signals, labels, save_path, max_plots=9):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='config.yaml', help='Path to config file')
-
-    parser.add_argument("--vqvae_ckpt", type=str, default='./VQVAE/models/tuned/final_model.pth', help="Path to your trained VQ-VAE .pt file")
-    parser.add_argument("--vqvae_config", type=str,default='./VQVAE/models/tuned/config.yaml', help="Path to the config.yaml used to train the VQ-VAE")
+    parser.add_argument('--config', type=str, required=True, help='Path to Transformer config (replicate_small.yaml)')
+    parser.add_argument("--vqvae_config", type=str, default=None, help="Path to VQ-VAE config")
+    parser.add_argument("--vqvae_ckpt", type=str, default=None, help="Path to VQ-VAE weights")
     parser.add_argument("--num_plots", type=int, default=9, help="Number of generated samples to plot")
     return parser.parse_args()
 
@@ -73,26 +69,54 @@ if __name__ == "__main__":
 
     with open(args.config, "r") as file:
         transformer_config = yaml.safe_load(file)
+    
+    exp_name = transformer_config['exp_name']
     model_files_base_directory = os.path.join(pathlib.Path(__file__).resolve().parent.__str__(), "models")
-    save_dir = os.path.join(model_files_base_directory, transformer_config['exp_name'])
-    # 1. Load the VQ-VAE configuration
-    with open(args.vqvae_config, 'r') as file:
+    save_dir = os.path.join(model_files_base_directory, exp_name)
+
+    # Resolve VQ-VAE paths
+    vq_config_path = args.vqvae_config
+    vq_ckpt_path = args.vqvae_ckpt
+
+    if vq_config_path is None or vq_ckpt_path is None:
+        # If not provided, try to derive from VQ_CONFIG env or default to tuned2
+        vq_config_path = vq_config_path or "./VQVAE/tuned_config2.yaml"
+        with open(vq_config_path, 'r') as file:
+            vq_cfg = yaml.safe_load(file)
+        vq_name = vq_cfg.get('name', 'tuned2')
+        vq_ckpt_path = vq_ckpt_path or f"./VQVAE/models/{vq_name}/final_model.pth"
+
+    with open(vq_config_path, 'r') as file:
         vqvae_config = yaml.safe_load(file)
         
     # 2. Initialize the decoder
     decoder = VQVAESignalDecoder(
-        vqvae_model_path=args.vqvae_ckpt, 
+        vqvae_model_path=vq_ckpt_path, 
         vqvae_config=vqvae_config
     )
     
     # 3. Decode the generated tokens back to continuous signals
-    print("\n--- Starting Decoding Process ---")
-    raw_signals, labels = decoder.decode_dataset(
-        csv_path=f'{save_dir}/synthetic_encoded_samples.csv',
-        save_dir=save_dir
-    )
+    print(f"\n--- Starting Decoding Process for {exp_name} ---")
+    # Note: synthetic_encoded_samples.csv is the default name used in some generation scripts
+    # But our new encoded_generation.py saves synthetic_df_...csv files.
+    # For samplevis, we might need a specific file or the first one.
     
-    # 4. Visualize and save the plots
-    print("\n--- Starting Visualization ---")
-    plot_filename = os.path.join(save_dir, "synthetic_signals_grid.png")
-    plot_synthetic_signals(raw_signals, labels, save_path=plot_filename, max_plots=args.num_plots)
+    sample_file = os.path.join(save_dir, "synthetic_df_70_5.csv") 
+    if not os.path.exists(sample_file):
+        # Fallback to any synthetic file
+        synth_files = [f for f in os.listdir(save_dir) if f.startswith("synthetic_df_")]
+        if synth_files:
+            sample_file = os.path.join(save_dir, synth_files[0])
+
+    if os.path.exists(sample_file):
+        raw_signals, labels = decoder.decode_dataset(
+            csv_path=sample_file,
+            save_dir=save_dir
+        )
+        
+        # 4. Visualize and save the plots
+        print("\n--- Starting Visualization ---")
+        plot_filename = os.path.join(save_dir, "synthetic_signals_grid.png")
+        plot_synthetic_signals(raw_signals, labels, save_path=plot_filename, max_plots=args.num_plots)
+    else:
+        print(f"No synthetic data found to visualize in {save_dir}")

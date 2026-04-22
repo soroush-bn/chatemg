@@ -1,90 +1,102 @@
-import pandas as pd
-import numpy as np
-import torch
 import os
 import yaml
+import torch
+import pandas as pd
+import numpy as np
+import argparse
+
 from VQVAE.model import SDformerVQVAE
 
-def reconstruct_pipeline(original_csv_path, encoded_csv_path, model, device, window_size=300, stride=30, batch_size=512):
+def reconstruct_pipeline(original_data_path, encoded_data_path, vqvae, device):
     """
-    Decodes tokens in batches and stitches them using Overlap-Add.
-    Handles memory by offloading to CPU and syncs lengths to avoid shape errors.
+    Reconstructs the original signals from the encoded tokens using the VQ-VAE decoder.
     """
-    print("Reading CSV files...")
-    df_orig = pd.read_csv(original_csv_path)
-    df_enc = pd.read_csv(encoded_csv_path)
-    
-    # Identify feature columns (exclude ground truth)
+    print(f"Loading original data from {original_data_path} for column info...")
+    df_orig = pd.read_csv(original_data_path)
     feature_cols = [c for c in df_orig.columns if c != 'gt']
-    num_channels = len(feature_cols)
     
-    # Prepare indices from encoded data
-    indices_np = df_enc.drop(columns=['gt']).values
-    num_windows = indices_np.shape[0]
+    print(f"Loading encoded tokens from {encoded_data_path}...")
+    df_encoded = pd.read_csv(encoded_data_path)
     
-    print(f"Original rows: {len(df_orig)} | Encoded windows: {num_windows}")
-    print(f"Decoding in batches of {batch_size}...")
+    # Extract only the token columns
+    token_cols = [c for c in df_encoded.columns if c != 'gt']
+    indices = torch.tensor(df_encoded[token_cols].values, dtype=torch.long).to(device)
+    
+    # Get ground truth labels
+    gt_labels = df_encoded['gt'].values
 
-    # Initialize canvas on CPU (RAM) to avoid GPU OOM
-    total_recon_len = (num_windows - 1) * stride + window_size
-    canvas = np.zeros((total_recon_len, num_channels), dtype=np.float32)
-    counts = np.zeros((total_recon_len, num_channels), dtype=np.float32)
-
-    model.eval()
+    print(f"Indices shape: {indices.shape}")
+    
+    # --- DECODING PHASE ---
+    print("Decoding tokens back to continuous signal...")
     with torch.no_grad():
-        for i in range(0, num_windows, batch_size):
-            # Batch slicing
-            end_idx = min(i + batch_size, num_windows)
-            batch_indices = torch.tensor(indices_np[i:end_idx], dtype=torch.long).to(device)
-            
-            # Map to codebook: [Batch, Time, Dim]
-            # Flattening handles non-contiguous memory
-            z_q = model.quantizer.embedding[batch_indices.reshape(-1)]
-            z_q = z_q.reshape(batch_indices.shape[0], batch_indices.shape[1], -1)
-            
-            # Prepare for Decoder: [Batch, Channels, Length]
-            z_q = z_q.permute(0, 2, 1).contiguous()
-            
-            # Decode and move to CPU immediately
-            batch_recon = model.decoder(z_q).cpu().numpy() 
-            
-            # Overlap-Add stitching
-            for j in range(batch_recon.shape[0]):
-                win_idx = i + j
-                start = win_idx * stride
-                end = start + window_size
-                # batch_recon shape is [Batch, Channels, Window_Size]
-                # We transpose to [Window_Size, Channels] for the canvas
-                canvas[start:end, :] += batch_recon[j].T
-                counts[start:end, :] += 1
-
-            if i % (batch_size * 5) == 0:
-                print(f"  Processed {i}/{num_windows} windows...")
-
-    print("Finalizing signal averaging...")
-    # Avoid division by zero
-    final_signal = canvas / np.maximum(counts, 1)
+        # VQ-VAE decode: tokens -> latent -> signal
+        # Map indices to embeddings
+        z_q = vqvae.quantizer.embedding[indices.reshape(-1)]
+        z_q = z_q.reshape(indices.shape[0], indices.shape[1], -1)
+        
+        # Reshape to [Batch, Channels, SeqLen] if VQ-VAE expects it
+        z_q = z_q.permute(0, 2, 1)
+        
+        # Decode
+        reconstructed_signal = vqvae.decoder(z_q)
+        
+    print(f"Reconstructed signal shape: {reconstructed_signal.shape}")
+    
+    # Flatten or handle overlapping windows (assuming stride=window_size for simple reconstruction)
+    # If using stride < window, this needs more complex overlap-add logic
+    # For now, we assume sequences are non-overlapping or treated as independent samples
+    
+    # Convert to numpy and reshape for CSV
+    # Result should be [TotalTime, NumSensors]
+    recon_np = reconstructed_signal.permute(0, 2, 1).cpu().numpy()
+    final_signal = recon_np.reshape(-1, len(feature_cols))
     
     # Create DataFrame from reconstructed signal
     df_reconstructed = pd.DataFrame(final_signal, columns=feature_cols)
     
+    # Add back the GT labels (repeat GT for each time step in the window)
+    # seq_len_per_sample = final_signal.shape[0] // len(gt_labels)
+    # df_reconstructed['gt'] = np.repeat(gt_labels, seq_len_per_sample)
+
     # --- SHAPE FIX: Sync lengths between original and reconstructed ---
-    # The stride-based reconstruction often leaves a small tail of original data unaddressed
     common_len = min(len(df_orig), len(df_reconstructed))
-    
+
     df_reconstructed_final = df_reconstructed.iloc[:common_len]
     df_orig_final = df_orig[feature_cols].iloc[:common_len]
     
+    # Add GT to recon
+    df_reconstructed_final = df_reconstructed_final.copy()
+    df_reconstructed_final['gt'] = df_orig['gt'].iloc[:common_len].values
+
     print(f"Sync complete. Final Shape: {df_reconstructed_final.shape}")
     return df_reconstructed_final, df_orig_final
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, required=True, help="Path to Transformer config (replicate_small.yaml)")
+    parser.add_argument('--vqvae_config', type=str, required=True, help="Path to VQ-VAE config (tuned_config2.yaml)")
+    args = parser.parse_args()
+
+    # Load configs
+    with open(args.config, 'r') as f:
+        tr_config = yaml.safe_load(f)
+    with open(args.vqvae_config, 'r') as f:
+        vq_config = yaml.safe_load(f)
+
+    exp_name = tr_config['exp_name']
+    vq_name = vq_config['name']
+
     # --- Path Configuration ---
-    CONFIG_PATH = "./VQVAE/tuned_config2.yaml"
-    ORIGINAL_DATA_PATH = "./VQVAE/models/tuned2/original_data_after_preprocessing.csv"
-    ENCODED_DATA_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_5_70.csv"
-    MODEL_WEIGHTS_PATH = "./VQVAE/models/tuned2/final_model.pth" 
-    SAVE_OUTPUT_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/reconstructed_final.csv"
+    CONFIG_PATH = args.vqvae_config
+    ORIGINAL_DATA_PATH = f"./VQVAE/models/{vq_name}/original_data_after_preprocessing.csv"
+    
+    # Defaulting to 5_70 for reconstruction as per previous script state
+    base_model_dir = f"/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/{exp_name}"
+    ENCODED_DATA_PATH = f"{base_model_dir}/synthetic_df_5_70.csv"
+    
+    MODEL_WEIGHTS_PATH = f"./VQVAE/models/{vq_name}/final_model.pth" 
+    SAVE_OUTPUT_PATH = f"{base_model_dir}/reconstructed_final.csv"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -92,42 +104,31 @@ def main():
         print(f"Error: Config not found at {CONFIG_PATH}")
         return
 
-    with open(CONFIG_PATH, 'r') as f:
-        config = yaml.safe_load(f)
-
     # Initialize and Load Model
-    model = SDformerVQVAE(config).to(device)
+    model = SDformerVQVAE(vq_config).to(device)
     
     if os.path.exists(MODEL_WEIGHTS_PATH):
         model.load_state_dict(torch.load(MODEL_WEIGHTS_PATH, map_location=device))
-        print(f"Weights loaded. Using device: {device}")
+        print(f"Weights loaded from {MODEL_WEIGHTS_PATH}. Using device: {device}")
     else:
         print(f"Error: Weights not found at {MODEL_WEIGHTS_PATH}")
         return
 
     try:
-        recon_df, orig_features = reconstruct_pipeline(
+        recon_df, _ = reconstruct_pipeline(
             ORIGINAL_DATA_PATH, 
             ENCODED_DATA_PATH, 
             model, 
-            device,
-            window_size=300,
-            stride=30,
-            batch_size=256 # Adjusted for safety; increase if VRAM allows
+            device
         )
-
-        # Calculate MSE on synced lengths
-        mse = np.mean((recon_df.values - orig_features.values) ** 2)
-        print(f"\nReconstruction MSE: {mse:.8f}")
-
-        # Save result
+        
+        # Save results
+        os.makedirs(os.path.dirname(SAVE_OUTPUT_PATH), exist_ok=True)
         recon_df.to_csv(SAVE_OUTPUT_PATH, index=False)
-        print(f"Reconstructed data saved to: {SAVE_OUTPUT_PATH}")
-
+        print(f"Successfully saved reconstructed data to: {SAVE_OUTPUT_PATH}")
+        
     except Exception as e:
-        print(f"An error occurred: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Reconstruction failed: {e}")
 
 if __name__ == "__main__":
     main()

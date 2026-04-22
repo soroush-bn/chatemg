@@ -2,16 +2,22 @@ import os
 import pathlib
 import yaml
 import torch
-import numpy as np
 import pandas as pd
+import numpy as np
+from tqdm import tqdm
 from contextlib import nullcontext
-from tqdm import tqdm  # Standard for progress bars
-from encoded_dataset import EncodedEMGDataset
+import argparse
+
+# UPDATE: Import the new classes
 from encoded_model import GPTConfig, ConditionedGPT
 
 def run_batch_generation():
     # 1. Setup & Config
-    config_path = './configs/replicate_small.yaml'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, required=True, help="Path to config file")
+    args = parser.parse_args()
+
+    config_path = args.config
     print(f"Reading config from: {config_path}")
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
@@ -25,6 +31,11 @@ def run_batch_generation():
     # 2. Load Model
     model_files_base_directory = os.path.join(pathlib.Path(__file__).resolve().parent.__str__(), "models")
     save_dir = os.path.join(model_files_base_directory, config['exp_name'])
+    
+    if not os.path.exists(save_dir):
+        print(f"Error: Model directory {save_dir} does not exist.")
+        return
+
     iter_folders = sorted([f for f in os.listdir(save_dir) if f.startswith('iter_')], 
                           key=lambda x: int(x.split('_')[1]), reverse=True)
     
@@ -99,7 +110,7 @@ def run_batch_generation():
         output_data = np.concatenate([all_labels.cpu().numpy().reshape(-1, 1), final_tokens], axis=1)
         df_out = pd.DataFrame(output_data, columns=cols)
         print(f"Saving generated dataset for ratio {prompt_size}:{gen_size}...")
-        print(f"Output shape: {df_out.shape}, Sample row:\n{df_out.iloc[0]}")
+        
         file_name = f"synthetic_df_{prompt_size}_{gen_size}.csv"
         save_path = os.path.join(save_dir, file_name)
         df_out.to_csv(save_path, index=False)

@@ -4,144 +4,106 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, f1_score
 import yaml
 import os
+import argparse
 
 from VQVAE.model import SDformerVQVAE
 
-# --- 1. CNN Architecture ---
-class CNNClassifier(nn.Module):
-    def __init__(self, code_dim=32, num_classes=17):
+# --- 1. MLP Classifier for Latent Space ---
+class LatentMLP(nn.Module):
+    def __init__(self, input_size, hidden_sizes=[512, 256, 128], num_classes=17):
         super().__init__()
-        self.features = nn.Sequential(
-            nn.Conv1d(in_channels=code_dim, out_channels=64, kernel_size=5, padding=2),
-            nn.BatchNorm1d(64),
+        self.network = nn.Sequential(
+            nn.Linear(input_size, hidden_sizes[0]),
+            nn.BatchNorm1d(hidden_sizes[0]),
             nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2),
-            
-            nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm1d(128),
+            nn.Dropout(0.3),
+            nn.Linear(hidden_sizes[0], hidden_sizes[1]),
+            nn.BatchNorm1d(hidden_sizes[1]),
             nn.ReLU(),
-            
-            nn.AdaptiveAvgPool1d(1) 
-        )
-        
-        self.classifier = nn.Sequential(
-            nn.Dropout(0.4),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, num_classes)
+            nn.Linear(hidden_sizes[1], num_classes)
         )
 
     def forward(self, x):
-        x = x.permute(0, 2, 1)
-        x = self.features(x)
-        x = x.squeeze(-1)   
-        return self.classifier(x)
+        # x is [Batch, seq_len, code_dim] -> we pool over time
+        x = x.mean(dim=1)
+        return self.network(x)
 
-# --- 2. Helper: Load, Embed, and Chunk Data ---
+# --- 2. Data Loading & Embedding ---
 def load_and_embed_data(csv_path, vqvae, device):
-    """Loads a CSV, maps tokens to embeddings, and detects participant boundaries."""
     df = pd.read_csv(csv_path)
-    
     gt_raw = df['gt'].values
-    labels = gt_raw - gt_raw.min() 
+    labels = gt_raw - gt_raw.min()
     y = torch.tensor(labels, dtype=torch.long)
     
     indices = torch.tensor(df.drop(columns=['gt']).values, dtype=torch.long).to(device)
-    num_samples, seq_len = indices.shape
-
+    
     with torch.no_grad():
         flat_indices = indices.reshape(-1)
         embeddings = vqvae.quantizer.embedding[flat_indices]
-        embeddings = embeddings.reshape(num_samples, seq_len, -1)
-        X = embeddings.cpu()
-        
-    # Detect participant boundaries based on GT drops (e.g., 16 -> 0)
-    participant_ids = np.zeros(num_samples, dtype=int)
-    current_p = 0
-    for i in range(1, num_samples):
-        if gt_raw[i] < gt_raw[i-1]:
-            current_p += 1
-        participant_ids[i] = current_p
-        
-    return X, y, participant_ids, current_p + 1
+        X = embeddings.reshape(indices.shape[0], indices.shape[1], -1).cpu()
 
-# --- 3. Helper: Train Model ---
-def train_model(X_train, y_train, device, code_dim=32, epochs=20, lr=0.001):
-    dataset = TensorDataset(X_train, y_train)
-    loader = DataLoader(dataset, batch_size=128, shuffle=True)
-    
-    model = CNNClassifier(code_dim=code_dim, num_classes=17).to(device)
+    # Participant boundaries based on GT order
+    p_ids = np.zeros(len(X), dtype=int)
+    current_p = 0
+    for i in range(1, len(X)):
+        if gt_raw[i] < gt_raw[i-1]: current_p += 1
+        p_ids[i] = current_p
+        
+    return X, y, p_ids, current_p + 1
+
+# --- 3. Training Helper ---
+def train_model(X, y, device, code_dim, epochs=20):
+    model = LatentMLP(input_size=code_dim).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
     
-    model.train()
-    for epoch in range(epochs):
+    loader = DataLoader(TensorDataset(X, y), batch_size=64, shuffle=True)
+    
+    for _ in range(epochs):
+        model.train()
         for batch_X, batch_y in loader:
             batch_X, batch_y = batch_X.to(device), batch_y.to(device)
             optimizer.zero_grad()
-            outputs = model(batch_X)
-            loss = criterion(outputs, batch_y)
+            loss = criterion(model(batch_X), batch_y)
             loss.backward()
             optimizer.step()
             
     return model
 
-# --- 4. Helper: Evaluate Model ---
-def evaluate_model(model, X_test, y_test, device):
-    dataset = TensorDataset(X_test, y_test)
-    loader = DataLoader(dataset, batch_size=128, shuffle=False)
-    
+# --- 4. Evaluation Helper ---
+def evaluate_model(model, X, y, device):
     model.eval()
-    all_preds = []
-    all_targets = []
-    
     with torch.no_grad():
-        for batch_X, batch_y in loader:
-            batch_X, batch_y = batch_X.to(device), batch_y.to(device)
-            outputs = model(batch_X)
-            _, predicted = torch.max(outputs.data, 1)
-            
-            all_preds.extend(predicted.cpu().numpy())
-            all_targets.extend(batch_y.cpu().numpy())
-
+        outputs = model(X.to(device))
+        _, preds = torch.max(outputs, 1)
+        all_preds = preds.cpu().numpy()
+        all_targets = y.numpy()
+        
     acc = accuracy_score(all_targets, all_preds)
     f1 = f1_score(all_targets, all_preds, average='weighted', zero_division=0)
     
     return acc, f1
 
 # --- 5. Main Cross-Validation Pipeline ---
-def cross_domain_validation():
+def cross_domain_validation(config_path, vqvae_weights, real_data_path, synth_datasets):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}\n")
 
-    # --- Configs & Paths ---
-    CONFIG_PATH = "./VQVAE/models/tuned2/config.yaml" 
-    VQVAE_WEIGHTS = "./VQVAE/models/tuned2/final_model.pth"
-    REAL_DATA_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/data/encoded_df.csv"
-    
-    SYNTH_DATASETS = {
-        "70% Real / 5% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_70_5.csv",
-        "60% Real / 15% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_60_15.csv",
-        "50% Real / 25% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_50_25.csv",
-        "25% Real / 50% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_25_50.csv",
-        "5% Real / 70% Synth": "/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/replicate_small/synthetic_df_5_70.csv"
-    }
-
     # --- Initialization ---
     print("Loading VQ-VAE codebook...")
-    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+    with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
         
     vqvae = SDformerVQVAE(config).to(device)
-    vqvae.load_state_dict(torch.load(VQVAE_WEIGHTS, map_location=device))
+    vqvae.load_state_dict(torch.load(vqvae_weights, map_location=device))
     vqvae.eval()
 
     # --- Load Real Data Baseline ---
-    print(f"Loading Real Baseline Data: {REAL_DATA_PATH}")
-    X_real, y_real, p_ids_real, num_participants = load_and_embed_data(REAL_DATA_PATH, vqvae, device)
+    print(f"Loading Real Baseline Data: {real_data_path}")
+    X_real, y_real, p_ids_real, num_participants = load_and_embed_data(real_data_path, vqvae, device)
     code_dim = X_real.shape[-1]
     
     # --- PRE-TRAIN BASELINE REAL MODELS ---
@@ -162,7 +124,7 @@ def cross_domain_validation():
     print("Baseline training complete.\n")
 
     # --- LOOP OVER SYNTHETIC DATASETS ---
-    for synth_name, synth_path in SYNTH_DATASETS.items():
+    for synth_name, synth_path in synth_datasets.items():
         if not os.path.exists(synth_path):
             print(f"Skipping {synth_name} - File not found at {synth_path}")
             continue
@@ -225,4 +187,33 @@ def cross_domain_validation():
         print("\n")
 
 if __name__ == "__main__":
-    cross_domain_validation()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, required=True, help="Path to Transformer config (replicate_small.yaml)")
+    parser.add_argument('--vqvae_config', type=str, required=True, help="Path to VQ-VAE config (tuned_config2.yaml)")
+    args = parser.parse_args()
+
+    # --- Configs & Paths ---
+    with open(args.config, 'r') as f:
+        tr_config = yaml.safe_load(f)
+    with open(args.vqvae_config, 'r') as f:
+        vq_config = yaml.safe_load(f)
+
+    exp_name = tr_config['exp_name']
+    vq_name = vq_config['name']
+    
+    # Derive paths
+    VQVAE_WEIGHTS = f"./VQVAE/models/{vq_name}/final_model.pth"
+    REAL_DATA_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/data/encoded_df.csv"
+    
+    base_model_dir = f"/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/{exp_name}"
+    
+    SYNTH_DATASETS = {
+        "70% Real / 5% Synth": f"{base_model_dir}/synthetic_df_70_5.csv",
+        "60% Real / 15% Synth": f"{base_model_dir}/synthetic_df_60_15.csv",
+        "50% Real / 25% Synth": f"{base_model_dir}/synthetic_df_50_25.csv",
+        "25% Real / 50% Synth": f"{base_model_dir}/synthetic_df_25_50.csv",
+        "5% Real / 70% Synth": f"{base_model_dir}/synthetic_df_5_70.csv"
+    }
+
+    print(f"--- Starting Cross-Domain Validation for Experiment: {exp_name} ---")
+    cross_domain_validation(args.vqvae_config, VQVAE_WEIGHTS, REAL_DATA_PATH, SYNTH_DATASETS)
