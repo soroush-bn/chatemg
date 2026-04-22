@@ -19,19 +19,21 @@ label_mapping = {
 }
 
 class EMGDataset(Dataset):
-    def __init__(self, window_size=300, stride=1, fs=2000):
+    def __init__(self, window_size=300, stride=1, fs=2000, split='all'):
         if stride < 1:
             raise ValueError("stride must be >= 1")
         self.window_size = window_size
         self.stride = stride
         self.fs = fs
+        self.split = split
         self.df = None 
 
-        print("Initializing Dataset... (This forces a fresh load of all data)")
+        print(f"Initializing Dataset (split={self.split})...")
         self.data = self._load_and_normalize_all()
         
         print(f"Dataset Ready. Total Samples: {len(self.data)}")
-        print(f"Tensor Stats -> Mean: {self.data.mean():.4f}, Std: {self.data.std():.4f}")
+        if len(self.data) > 0:
+            print(f"Tensor Stats -> Mean: {self.data.mean():.4f}, Std: {self.data.std():.4f}")
 
     def _apply_filters(self, data):
         """
@@ -54,10 +56,11 @@ class EMGDataset(Dataset):
 
     def _load_and_normalize_all(self):
         """
-        Loads raw data for all subjects, merges them, and applies 
-        Global Standardization (Mean=0, Std=1) in one clean pass.
+        Loads raw data for all subjects, splits it into train/unseen,
+        and applies Global Standardization based on the train split.
         """
-        all_subject_dfs = []
+        all_train_dfs = []
+        all_unseen_dfs = []
         
         for subject_id in config['participants_list_ids']:
             raw_path = os.path.join(config["raw_data_path"], subject_id, config["df_raw_name"])
@@ -75,8 +78,8 @@ class EMGDataset(Dataset):
             
             if config['sensor_type'] == 'emg':
                 if 'label' in df.columns:
-                    df = df[df['label'].notna() & (df['label'] != 'rest')]
-                    
+                    # Filter out rest and NaNs early
+                    df = df[df['label'].notna() & (df['label'] != 'rest')].copy()
                     df['gt'] = df['label'].map(label_mapping).astype('int64') 
 
                 emg_cols = [c for c in df.columns if 'emg' in c.lower()]
@@ -85,29 +88,63 @@ class EMGDataset(Dataset):
                 df[emg_cols] = self._apply_filters(df[emg_cols].values)
                 
                 cols_to_keep = emg_cols + (['gt'] if 'gt' in df.columns else [])
-                
                 df_filtered = df[cols_to_keep].copy()
-                all_subject_dfs.append(df_filtered)
-            
-            # (Add IMU logic here if needed)
+                
+                # Split per gesture for this participant
+                train_parts = []
+                unseen_parts = []
+                
+                # Identify contiguous segments of the same gesture
+                df_filtered['segment'] = (df_filtered['gt'] != df_filtered['gt'].shift()).cumsum()
+                
+                for _, segment_df in df_filtered.groupby('segment'):
+                    if len(segment_df) < 1: continue
+                    
+                    # Split: last 25% (one repetition out of four)
+                    n = len(segment_df)
+                    # Use 4000 if it's close to a multiple of 4000, otherwise 75%
+                    if n >= 4000:
+                        split_idx = n - 4000
+                    else:
+                        split_idx = int(n * 0.75)
+                    
+                    train_parts.append(segment_df.iloc[:split_idx])
+                    unseen_parts.append(segment_df.iloc[split_idx:])
+                
+                if train_parts:
+                    all_train_dfs.append(pd.concat(train_parts).drop(columns=['segment']))
+                if unseen_parts:
+                    all_unseen_dfs.append(pd.concat(unseen_parts).drop(columns=['segment']))
 
-        if not all_subject_dfs:
+        if not all_train_dfs:
             raise RuntimeError("No data loaded! Check your paths and participant IDs.")
             
-        full_df = pd.concat(all_subject_dfs, axis=0, ignore_index=True)
+        train_df = pd.concat(all_train_dfs, axis=0, ignore_index=True)
+        unseen_df = pd.concat(all_unseen_dfs, axis=0, ignore_index=True) if all_unseen_dfs else pd.DataFrame()
         
-        self.df = full_df
-        print("Applying Global StandardScaler...")
+        print(f"Split Summary -> Train Rows: {len(train_df)}, Unseen Rows: {len(unseen_df)}")
+        
+        # Fit scaler ONLY on train data
+        print("Fitting Global StandardScaler on Train Split...")
         scaler = StandardScaler()
+        emg_cols = [c for c in train_df.columns if 'emg' in c.lower()]
+        scaler.fit(train_df[emg_cols].values)
         
-        emg_cols = [c for c in full_df.columns if 'emg' in c.lower()]
-        data_values = full_df[emg_cols].values
-        
-        np_data = scaler.fit_transform(data_values)
-        
-        full_df[emg_cols] = np_data
-        self.df = full_df
+        # Select target df
+        if self.split == 'train':
+            target_df = train_df
+        elif self.split == 'unseen':
+            target_df = unseen_df
+        else:
+            target_df = pd.concat([train_df, unseen_df], axis=0, ignore_index=True)
+            
+        self.df = target_df
+        if len(target_df) == 0:
+            return torch.tensor([], dtype=torch.float32)
+            
+        np_data = scaler.transform(target_df[emg_cols].values)
         return torch.tensor(np_data, dtype=torch.float32)
+
 
     def _convert_units(self, df):
         """Simple unit conversion helper"""

@@ -27,22 +27,28 @@ with open(os.path.join(save_dir, "config.yaml"), "w") as file:
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Pipeline initialized on {device}. Saving results to: {save_dir}")
+# --- 2. Load Dataset ---
+print("\n--- Loading Datasets ---")
+train_dataset = EMGDataset(window_size=config['window_size'], stride=config['stride'], split='train')
+unseen_dataset = EMGDataset(window_size=config['window_size'], stride=config['stride'], split='unseen')
 
-full_dataset = EMGDataset(window_size=config['window_size'], stride=config['stride'])
-full_dataset.save_df(os.path.join(save_dir, "original_data_after_preprocessing.csv")) 
-print(f"Full dataset loaded with {len(full_dataset)} samples. DataFrame saved for reference.")
+train_dataset.save_df(os.path.join(save_dir, "train_data_preprocessed.csv")) 
+unseen_dataset.save_df(os.path.join(save_dir, "unseen_data_preprocessed.csv")) 
+
+print(f"Train dataset: {len(train_dataset)} samples")
+print(f"Unseen dataset: {len(unseen_dataset)} samples")
 print("$" * 50)
-# --- 3. Train/Validation Split ---
-# Using 100% of data for training as requested
-train_dataset = full_dataset
-val_dataset = full_dataset
 
-print(f"Data Split: {len(train_dataset)} Training | {len(val_dataset)} Validation (Full Overlap)")
+# --- 3. Train/Validation Split ---
+# Train on 75% (train split), Test on 25% (unseen split)
+val_dataset = unseen_dataset
+
+print(f"Data Split: {len(train_dataset)} Training | {len(val_dataset)} Validation (Unseen)")
 
 # Create DataLoaders
-
 train_loader = DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True, drop_last=True)
 val_loader = DataLoader(val_dataset, batch_size=config['batch_size'], shuffle=False, drop_last=True)
+
 
 # Sanity Check
 first_batch = next(iter(train_loader))
@@ -81,6 +87,9 @@ viz.plot_single_reconstruction(val_loader, sample_index=0)
 viz.plot_single_reconstruction(val_loader, sample_index=10)
 
 print("4/4. Tracing Full Gesture Pipeline...")
+# Re-load full dataset for visualization and encoding
+full_dataset = EMGDataset(window_size=config['window_size'], stride=config['stride'], split='all')
+
 gestures = [11, 8, 17] # Power Grip, OK, Rest
 for label_id in gestures:
     for rep in [0, 4]: # Participant 1 & 2

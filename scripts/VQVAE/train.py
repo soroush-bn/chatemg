@@ -75,7 +75,6 @@ def train_vqvae(model, dataloader, device, optimizer, config):
             try:
                 import wandb
 
-                # compute MSE explicitly (same as recon here)
                 mse_val = avg_recon
                 wandb.log(
                     {
