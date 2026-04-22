@@ -25,7 +25,7 @@ echo "Git Commit (short): $(git rev-parse --short HEAD)"
 NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 echo "Number of GPUs detected: $NUM_GPUS"
 
-Launch distributed training with torchrun if multiple GPUs, otherwise single GPU
+#Launch distributed training with torchrun if multiple GPUs, otherwise single GPU
 if [ "$NUM_GPUS" -gt 1 ]; then
     echo "Launching distributed training on $NUM_GPUS GPUs"
     torchrun --standalone --nproc_per_node=$NUM_GPUS train.py --config "$CONFIG"
