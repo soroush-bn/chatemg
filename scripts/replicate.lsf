@@ -4,8 +4,8 @@
 
 # --- SINGLE SOURCE OF TRUTH ---
 # Change these paths once here to update the entire pipeline
-export VQ_CONFIG="/gpfs/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/tuned_config2.yaml"
-export TR_CONFIG="/gpfs/home/sbaghernezha/projects/chatemg/chatemg/scripts/configs/replicate_small.yaml"
+export VQ_CONFIG="/gpfs/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/tuned_config100.yaml"
+export TR_CONFIG="/gpfs/home/sbaghernezha/projects/chatemg/chatemg/scripts/configs/replicate_small100.yaml"
 # ------------------------------
 
 # 1. Train VQ-VAE (Phase 1)

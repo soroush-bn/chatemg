@@ -33,12 +33,11 @@ full_dataset.save_df(os.path.join(save_dir, "original_data_after_preprocessing.c
 print(f"Full dataset loaded with {len(full_dataset)} samples. DataFrame saved for reference.")
 print("$" * 50)
 # --- 3. Train/Validation Split ---
-# 80% Train, 20% Val
-train_size = int(0.8 * len(full_dataset))
-val_size = len(full_dataset) - train_size
-train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+# Using 100% of data for training as requested
+train_dataset = full_dataset
+val_dataset = full_dataset
 
-print(f"Data Split: {len(train_dataset)} Training | {len(val_dataset)} Validation")
+print(f"Data Split: {len(train_dataset)} Training | {len(val_dataset)} Validation (Full Overlap)")
 
 # Create DataLoaders
 

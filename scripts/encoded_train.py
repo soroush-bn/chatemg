@@ -105,12 +105,16 @@ train_dataset = EncodedEMGDataset(
 )
 
 # 2. Initialize Stratified Validation Dataset
-test_dataset = EncodedEMGDataset(
-    csv_files=[data_file_full_path],
-    filter_class=config.get('filter_class', None),
-    which_file="sample", # "sample" triggers the remaining (e.g., 20%) split in your dataset class
-    split_ratio=split_ratio
-)
+if split_ratio >= 1.0:
+    print("Using 100% of data for validation as well (Full Overlap)")
+    test_dataset = train_dataset
+else:
+    test_dataset = EncodedEMGDataset(
+        csv_files=[data_file_full_path],
+        filter_class=config.get('filter_class', None),
+        which_file="sample", # "sample" triggers the remaining split in your dataset class
+        split_ratio=split_ratio
+    )
 
 batch_size = config.get('batch_size', 64)
 
