@@ -92,10 +92,14 @@ if __name__ == "__main__":
     exp_name = tr_config['exp_name']
     vq_name = vq_config['name']
 
-    base_model_dir = f"/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/{exp_name}"
+    model_files_base_directory = os.path.join(pathlib.Path(__file__).resolve().parent.__str__(), "models")
+    base_model_dir = os.path.join(model_files_base_directory, exp_name)
     
-    ORIG_PATH = f"./VQVAE/models/{vq_name}/original_data_after_preprocessing.csv"
-    RECON_PATH = f"{base_model_dir}/reconstructed_final.csv"
-    SAVE_DIR = f"{base_model_dir}/gesture_plots"
+    # Use UNSEEN data paths
+    ORIG_PATH = f"./VQVAE/models/{vq_name}/unseen_data_preprocessed.csv"
+    RECON_PATH = f"{base_model_dir}/unseen_reconstructed_final.csv"
+    SAVE_DIR = f"{base_model_dir}/unseen_gesture_plots"
     
+    # Adjust visualization for single (unseen) repetition if needed
+    # (The plotting function assumes 4 reps, but for unseen data we might only have 1 per participant per gesture)
     visualize_gesture_reconstruction(ORIG_PATH, RECON_PATH, save_dir=SAVE_DIR)

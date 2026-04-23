@@ -1,4 +1,5 @@
 import os
+import pathlib
 import yaml
 import torch
 import pandas as pd
@@ -7,9 +8,10 @@ import argparse
 
 from VQVAE.model import SDformerVQVAE
 
-def reconstruct_pipeline(original_data_path, encoded_data_path, vqvae, device):
+def reconstruct_pipeline(original_data_path, encoded_data_path, vqvae, device, window_size=300, stride=150):
     """
     Reconstructs the original signals from the encoded tokens using the VQ-VAE decoder.
+    Handles overlapping windows by taking the center part of each decoded window.
     """
     print(f"Loading original data from {original_data_path} for column info...")
     df_orig = pd.read_csv(original_data_path)
@@ -29,36 +31,41 @@ def reconstruct_pipeline(original_data_path, encoded_data_path, vqvae, device):
     
     # --- DECODING PHASE ---
     print("Decoding tokens back to continuous signal...")
+    all_reconstructed_chunks = []
+    
     with torch.no_grad():
-        # VQ-VAE decode: tokens -> latent -> signal
-        # Map indices to embeddings
-        z_q = vqvae.quantizer.embedding[indices.reshape(-1)]
-        z_q = z_q.reshape(indices.shape[0], indices.shape[1], -1)
+        # Process in batches to avoid OOM
+        batch_size = 128
+        for i in range(0, len(indices), batch_size):
+            batch_indices = indices[i : i + batch_size]
+            
+            # Map indices to embeddings
+            z_q = vqvae.quantizer.embedding[batch_indices.reshape(-1)]
+            z_q = z_q.reshape(batch_indices.shape[0], batch_indices.shape[1], -1)
+            
+            # Reshape to [Batch, Channels, SeqLen]
+            z_q = z_q.permute(0, 2, 1)
+            
+            # Decode
+            reconstructed_batch = vqvae.decoder(z_q) # [Batch, Channels, WindowSize]
+            
+            # --- OVERLAP-ADD / STRIDE LOGIC ---
+            # If stride < window_size, we need to pick which part of the window to keep.
+            # A common approach is to take the middle 'stride' samples.
+            
+            margin = (window_size - stride) // 2
+            # recon_batch: [B, C, W] -> take [B, C, margin : margin + stride]
+            chunk = reconstructed_batch[:, :, margin : margin + stride]
+            all_reconstructed_chunks.append(chunk.permute(0, 2, 1).cpu().numpy())
         
-        # Reshape to [Batch, Channels, SeqLen] if VQ-VAE expects it
-        z_q = z_q.permute(0, 2, 1)
-        
-        # Decode
-        reconstructed_signal = vqvae.decoder(z_q)
-        
-    print(f"Reconstructed signal shape: {reconstructed_signal.shape}")
-    
-    # Flatten or handle overlapping windows (assuming stride=window_size for simple reconstruction)
-    # If using stride < window, this needs more complex overlap-add logic
-    # For now, we assume sequences are non-overlapping or treated as independent samples
-    
-    # Convert to numpy and reshape for CSV
-    # Result should be [TotalTime, NumSensors]
-    recon_np = reconstructed_signal.permute(0, 2, 1).cpu().numpy()
+    # Concatenate all chunks: [TotalChunks, Stride, Channels]
+    recon_np = np.concatenate(all_reconstructed_chunks, axis=0)
+    # Reshape to continuous: [TotalTime, Channels]
     final_signal = recon_np.reshape(-1, len(feature_cols))
     
     # Create DataFrame from reconstructed signal
     df_reconstructed = pd.DataFrame(final_signal, columns=feature_cols)
     
-    # Add back the GT labels (repeat GT for each time step in the window)
-    # seq_len_per_sample = final_signal.shape[0] // len(gt_labels)
-    # df_reconstructed['gt'] = np.repeat(gt_labels, seq_len_per_sample)
-
     # --- SHAPE FIX: Sync lengths between original and reconstructed ---
     common_len = min(len(df_orig), len(df_reconstructed))
 
@@ -88,15 +95,35 @@ def main():
     vq_name = vq_config['name']
 
     # --- Path Configuration ---
+    model_files_base_directory = os.path.join(pathlib.Path(__file__).resolve().parent.__str__(), "models")
+    vqvae_models_dir = os.path.join(pathlib.Path(__file__).resolve().parent.__str__(), "VQVAE", "models")
     CONFIG_PATH = args.vqvae_config
-    ORIGINAL_DATA_PATH = f"./VQVAE/models/{vq_name}/original_data_after_preprocessing.csv"
+    # Point to the UNSEEN preprocessed data from the VQ-VAE phase
+    ORIGINAL_DATA_PATH = os.path.join(vqvae_models_dir, vq_name, "unseen_data_preprocessed.csv")
     
-    # Defaulting to 5_70 for reconstruction as per previous script state
-    base_model_dir = f"/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/{exp_name}"
-    ENCODED_DATA_PATH = f"{base_model_dir}/synthetic_df_5_70.csv"
+    # Priority for encoded data:
+    # 1. New 'unseen_synthetic' files
+    # 2. Generic 'unseen_synthetic_encoded_samples.csv'
+    # 3. Fallback to old naming 'synthetic_df_...'
     
-    MODEL_WEIGHTS_PATH = f"./VQVAE/models/{vq_name}/final_model.pth" 
-    SAVE_OUTPUT_PATH = f"{base_model_dir}/reconstructed_final.csv"
+    base_model_dir = os.path.join(model_files_base_directory, exp_name)
+    ENCODED_DATA_PATH = os.path.join(base_model_dir, "unseen_synthetic_df_5_70.csv")
+    
+    if not os.path.exists(ENCODED_DATA_PATH):
+        ENCODED_DATA_PATH = os.path.join(base_model_dir, "unseen_synthetic_encoded_samples.csv")
+        
+    if not os.path.exists(ENCODED_DATA_PATH):
+        synth_files = sorted([f for f in os.listdir(base_model_dir) if f.startswith("unseen_synthetic_")], reverse=True)
+        if synth_files:
+            ENCODED_DATA_PATH = os.path.join(base_model_dir, synth_files[0])
+            
+    if not os.path.exists(ENCODED_DATA_PATH):
+        synth_files = sorted([f for f in os.listdir(base_model_dir) if f.startswith("synthetic_df_")], reverse=True)
+        if synth_files:
+            ENCODED_DATA_PATH = os.path.join(base_model_dir, synth_files[0])
+    
+    MODEL_WEIGHTS_PATH = os.path.join(vqvae_models_dir, vq_name, "final_model.pth") 
+    SAVE_OUTPUT_PATH = os.path.join(base_model_dir, "unseen_reconstructed_final.csv")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -119,7 +146,9 @@ def main():
             ORIGINAL_DATA_PATH, 
             ENCODED_DATA_PATH, 
             model, 
-            device
+            device,
+            window_size=vq_config.get('window_size', 300),
+            stride=vq_config.get('stride', 150)
         )
         
         # Save results

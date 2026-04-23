@@ -97,18 +97,27 @@ if __name__ == "__main__":
     
     # 3. Decode the generated tokens back to continuous signals
     print(f"\n--- Starting Decoding Process for {exp_name} ---")
-    # Note: synthetic_encoded_samples.csv is the default name used in some generation scripts
-    # But our new encoded_generation.py saves synthetic_df_...csv files.
-    # For samplevis, we might need a specific file or the first one.
     
-    sample_file = os.path.join(save_dir, "synthetic_df_70_5.csv") 
+    # Prioritize 'unseen_synthetic' files
+    sample_file = os.path.join(save_dir, "unseen_synthetic_df_5_70.csv") 
     if not os.path.exists(sample_file):
-        # Fallback to any synthetic file
-        synth_files = [f for f in os.listdir(save_dir) if f.startswith("synthetic_df_")]
+        # Try generic unseen sample file
+        sample_file = os.path.join(save_dir, "unseen_synthetic_encoded_samples.csv")
+        
+    if not os.path.exists(sample_file):
+        # Fallback to any unseen synthetic file
+        synth_files = sorted([f for f in os.listdir(save_dir) if f.startswith("unseen_synthetic_")], reverse=True)
+        if synth_files:
+            sample_file = os.path.join(save_dir, synth_files[0])
+            
+    if not os.path.exists(sample_file):
+        # Last resort fallback to old naming
+        synth_files = sorted([f for f in os.listdir(save_dir) if f.startswith("synthetic_df_")], reverse=True)
         if synth_files:
             sample_file = os.path.join(save_dir, synth_files[0])
 
     if os.path.exists(sample_file):
+        print(f"Processing tokens from: {sample_file}")
         raw_signals, labels = decoder.decode_dataset(
             csv_path=sample_file,
             save_dir=save_dir

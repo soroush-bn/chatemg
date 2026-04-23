@@ -20,11 +20,11 @@ block_size: 74           # Correct: 75 columns - 1 for offset targeting
 vocab_size: 512          # Matches your VQ-VAE codebook size
 # -----------------------------------------
 
-split: 0.8
-ckpt_path: null
+# Explicit paths from VQ-VAE phase
+train_data_path: "./VQVAE/models/test_run8_1epoch/train_encoded_df.csv"
+val_data_path: "./VQVAE/models/test_run8_1epoch/unseen_encoded_df.csv"
 
-# Data files
-encoded_data_path: "../data/encoded_df.csv" # Explicit path for the new train.py
+ckpt_path: null
 
 # Model architecture
 n_layer: 6

@@ -75,11 +75,12 @@ if __name__ == "__main__":
     model.to(device)
 
     # 4. Load Dataset to get real prompt starting tokens
-    data_file_full_path = config.get('encoded_data_path', "../data/encoded_df.csv")
+    # Use val_data_path (unseen) for sampling if available, otherwise fallback to encoded_data_path
+    data_file_full_path = config.get('val_data_path', config.get('encoded_data_path', "../data/encoded_df.csv"))
+    print(f"Loading source dataset for sampling from: {data_file_full_path}")
     test_dataset = EncodedEMGDataset(
         csv_files=[data_file_full_path],
-        filter_class=None,
-        which_file="sample" # Pull from validation set
+        filter_class=None
     )
 
     # Fetch real samples to act as seed prompts
@@ -124,7 +125,7 @@ if __name__ == "__main__":
     df_generated = pd.DataFrame(data, columns=columns)
 
     # Save to disk
-    out_file = os.path.join(save_dir, "synthetic_encoded_samples.csv")
+    out_file = os.path.join(save_dir, "unseen_synthetic_encoded_samples.csv")
     df_generated.to_csv(out_file, index=False)
     
     print(f"\nSuccessfully generated {args.num_samples} samples.")

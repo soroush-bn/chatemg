@@ -15,14 +15,10 @@ JOB1_OUT=$(eval $JOB1_CMD)
 JOB1_ID=$(echo $JOB1_OUT | grep -oP '(?<=Job <)\d+(?=>)')
 echo "Stage 1 submitted with ID: $JOB1_ID"
 
-# Copy encoded data to the expected location for Stage 2
-echo "Copying encoded data from VQ-VAE output..."
-# Note: We derive the path from our VQ_CONFIG knowledge (tuned2 is currently hardcoded here but could be dynamic)
-cp /home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/models/tuned2/encoded_df.csv ../data/encoded_df.csv
-
 # 2. Train Gesture Transformer (Phase 2)
-JOB2_CMD="bsub -env \"CONFIG=$TR_CONFIG\" -J replicate_run -q gpu -gpu \"num=1\" -o ./outs/%J.out -e ./errors/%J.err < encoded_run.lsf"
-echo "Submitting Stage 2: Transformer Training..."
+# Added -w "done($JOB1_ID)" so it waits for Phase 1 to generate the encoded data
+JOB2_CMD="bsub -w \"done($JOB1_ID)\" -env \"CONFIG=$TR_CONFIG\" -J replicate_run -q gpu -gpu \"num=1\" -o ./outs/%J.out -e ./errors/%J.err < encoded_run.lsf"
+echo "Submitting Stage 2: Transformer Training (waiting for $JOB1_ID)..."
 JOB2_OUT=$(eval $JOB2_CMD)
 JOB2_ID=$(echo $JOB2_OUT | grep -oP '(?<=Job <)\d+(?=>)')
 echo "Stage 2 submitted with ID: $JOB2_ID"

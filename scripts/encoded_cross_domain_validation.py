@@ -7,6 +7,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from sklearn.metrics import accuracy_score, f1_score
 import yaml
 import os
+import pathlib
 import argparse
 
 from VQVAE.model import SDformerVQVAE
@@ -33,12 +34,16 @@ class LatentMLP(nn.Module):
 
 # --- 2. Data Loading & Embedding ---
 def load_and_embed_data(csv_path, vqvae, device):
+    if not os.path.exists(csv_path):
+        return None, None, None, 0
+        
     df = pd.read_csv(csv_path)
     gt_raw = df['gt'].values
     labels = gt_raw - gt_raw.min()
     y = torch.tensor(labels, dtype=torch.long)
     
-    indices = torch.tensor(df.drop(columns=['gt']).values, dtype=torch.long).to(device)
+    token_cols = [c for c in df.columns if c != 'gt']
+    indices = torch.tensor(df[token_cols].values, dtype=torch.long).to(device)
     
     with torch.no_grad():
         flat_indices = indices.reshape(-1)
@@ -102,12 +107,16 @@ def cross_domain_validation(config_path, vqvae_weights, real_data_path, synth_da
     vqvae.eval()
 
     # --- Load Real Data Baseline ---
-    print(f"Loading Real Baseline Data: {real_data_path}")
+    print(f"Loading Real Data (Full/Combined): {real_data_path}")
     X_real, y_real, p_ids_real, num_participants = load_and_embed_data(real_data_path, vqvae, device)
+    if X_real is None:
+        print("Error: Real data not found.")
+        return
+        
     code_dim = X_real.shape[-1]
     
     # --- PRE-TRAIN BASELINE REAL MODELS ---
-    print("\nPre-training Baseline Real Models (This only happens once)...")
+    print("\nPre-training Baseline Real Models...")
     
     # Global Model (Scenario 1)
     print("  -> Training Global Real Model (All Subjects)...")
@@ -126,7 +135,6 @@ def cross_domain_validation(config_path, vqvae_weights, real_data_path, synth_da
     # --- LOOP OVER SYNTHETIC DATASETS ---
     for synth_name, synth_path in synth_datasets.items():
         if not os.path.exists(synth_path):
-            print(f"Skipping {synth_name} - File not found at {synth_path}")
             continue
             
         print("="*70)
@@ -135,6 +143,7 @@ def cross_domain_validation(config_path, vqvae_weights, real_data_path, synth_da
         
         # Load this specific synthetic dataset
         X_synth, y_synth, p_ids_synth, _ = load_and_embed_data(synth_path, vqvae, device)
+        if X_synth is None: continue
         
         # -----------------------------------------------------------------
         # SCENARIO 1: BETWEEN-SUBJECTS (Global)
@@ -146,7 +155,6 @@ def cross_domain_validation(config_path, vqvae_weights, real_data_path, synth_da
         print(f"[Train: REAL -> Test: SYNTH] Accuracy: {acc_1A*100:.2f}% | F1: {f1_1A*100:.2f}%")
         
         # Phase 1B: Train Synth -> Test Real
-        # We must train a new global model on this synthetic dataset
         global_synth_model = train_model(X_synth, y_synth, device, code_dim=code_dim, epochs=20)
         acc_1B, f1_1B = evaluate_model(global_synth_model, X_real, y_real, device)
         print(f"[Train: SYNTH -> Test: REAL] Accuracy: {acc_1B*100:.2f}% | F1: {f1_1B*100:.2f}%")
@@ -188,8 +196,8 @@ def cross_domain_validation(config_path, vqvae_weights, real_data_path, synth_da
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, required=True, help="Path to Transformer config (replicate_small.yaml)")
-    parser.add_argument('--vqvae_config', type=str, required=True, help="Path to VQ-VAE config (tuned_config2.yaml)")
+    parser.add_argument('--config', type=str, required=True, help="Path to Transformer config")
+    parser.add_argument('--vqvae_config', type=str, required=True, help="Path to VQ-VAE config")
     args = parser.parse_args()
 
     # --- Configs & Paths ---
@@ -201,19 +209,24 @@ if __name__ == "__main__":
     exp_name = tr_config['exp_name']
     vq_name = vq_config['name']
     
-    # Derive paths
+    # Resolve Paths
+    model_files_base_directory = os.path.join(pathlib.Path(__file__).resolve().parent.__str__(), "models")
+    base_model_dir = os.path.join(model_files_base_directory, exp_name)
+    
     VQVAE_WEIGHTS = f"./VQVAE/models/{vq_name}/final_model.pth"
-    REAL_DATA_PATH = "/home/sbaghernezha/projects/chatemg/chatemg/data/encoded_df.csv"
+    # Use the combined encoded data for baseline cross-validation
+    REAL_DATA_PATH = f"./VQVAE/models/{vq_name}/encoded_df.csv"
     
-    base_model_dir = f"/home/sbaghernezha/projects/chatemg/chatemg/scripts/models/{exp_name}"
-    
+    # Evaluate the primary 'unseen synthetic' dataset
     SYNTH_DATASETS = {
-        "70% Real / 5% Synth": f"{base_model_dir}/synthetic_df_70_5.csv",
-        "60% Real / 15% Synth": f"{base_model_dir}/synthetic_df_60_15.csv",
-        "50% Real / 25% Synth": f"{base_model_dir}/synthetic_df_50_25.csv",
-        "25% Real / 50% Synth": f"{base_model_dir}/synthetic_df_25_50.csv",
-        "5% Real / 70% Synth": f"{base_model_dir}/synthetic_df_5_70.csv"
+        "Unseen Synthetic (5_70)": f"{base_model_dir}/unseen_synthetic_df_5_70.csv",
+        "Unseen Synthetic Samples": f"{base_model_dir}/unseen_synthetic_encoded_samples.csv",
     }
+    
+    # Add other variants if they exist
+    ratios = ["70_5", "60_15", "50_25", "25_50"]
+    for r in ratios:
+        SYNTH_DATASETS[f"Unseen Synthetic ({r})"] = f"{base_model_dir}/unseen_synthetic_df_{r}.csv"
 
     print(f"--- Starting Cross-Domain Validation for Experiment: {exp_name} ---")
     cross_domain_validation(args.vqvae_config, VQVAE_WEIGHTS, REAL_DATA_PATH, SYNTH_DATASETS)

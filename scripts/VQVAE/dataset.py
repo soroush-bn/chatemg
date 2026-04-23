@@ -7,21 +7,11 @@ import os
 from sklearn.preprocessing import StandardScaler
 from scipy.signal import butter, filtfilt, iirnotch
 
-# Load config once
-with open("vqvae_config.yaml", "r") as file:
-    config = yaml.safe_load(file)
-
-# Label mapping from convert_to_p7_format.py
-label_mapping = {
-    "Thumb Extension":0,"index Extension":1,"Middle Extension":2,"Ring Extension":3,
-    "Pinky Extension":4,"Thumbs Up":5,"Right Angle":6,"Peace":7,"OK":8,"Horn":9,"Hang Loose":10,
-    "Power Grip":11,"Hand Open":12,"Wrist Extension":13,"Wrist Flexion":14,"Ulnar deviation":15,"Radial Deviation":16    
-}
-
 class EMGDataset(Dataset):
-    def __init__(self, window_size=300, stride=1, fs=2000, split='all'):
+    def __init__(self, config, window_size=300, stride=1, fs=2000, split='all'):
         if stride < 1:
             raise ValueError("stride must be >= 1")
+        self.config = config
         self.window_size = window_size
         self.stride = stride
         self.fs = fs
@@ -62,8 +52,8 @@ class EMGDataset(Dataset):
         all_train_dfs = []
         all_unseen_dfs = []
         
-        for subject_id in config['participants_list_ids']:
-            raw_path = os.path.join(config["raw_data_path"], subject_id, config["df_raw_name"])
+        for subject_id in self.config['participants_list_ids']:
+            raw_path = os.path.join(self.config["raw_data_path"], subject_id, self.config["df_raw_name"])
             
             if not os.path.exists(raw_path):
                 print(f"WARNING: File not found for {subject_id} at {raw_path}. Skipping.")
@@ -76,7 +66,7 @@ class EMGDataset(Dataset):
             sensor_cols = [c for c in df.columns if any(k in c.lower() for k in ['emg', 'accel', 'gyro'])]
             df[sensor_cols] = df[sensor_cols].interpolate(method='linear', limit_direction='both').fillna(0)
             
-            if config['sensor_type'] == 'emg':
+            if self.config['sensor_type'] == 'emg':
                 if 'label' in df.columns:
                     # Filter out rest and NaNs early
                     df = df[df['label'].notna() & (df['label'] != 'rest')].copy()

@@ -8,46 +8,33 @@ class EncodedEMGDataset(Dataset):
     def __init__(
         self,
         csv_files,
-        filter_class=None,
-        which_file="train",
-        split_ratio=0.7
+        filter_class=None
     ):
         """
-        Dataset loader specifically for VQ-VAE encoded discrete tokens.
+        Dataset loader for VQ-VAE encoded discrete tokens.
+        Loads data from provided CSV files without internal splitting.
         """
         self.csv_files = csv_files if isinstance(csv_files, list) else [csv_files]
         self.filter_class = filter_class
-        self.which_file = which_file
 
         print(f"[SHAPE TRACK] ===== INITIALIZING ENCODED DATASET =====")
         df_list = []
         for f in self.csv_files:
+            if not os.path.exists(f):
+                print(f"WARNING: File {f} not found!")
+                continue
             df = pd.read_csv(f)
             print(f"[SHAPE TRACK] Loaded CSV from {os.path.basename(f)}: {df.shape}")
             df_list.append(df)
             
+        if not df_list:
+            raise FileNotFoundError("No valid CSV files found for dataset initialization.")
+
         df_all = pd.concat(df_list, ignore_index=True)
 
         if self.filter_class is not None:
             print(f"[SHAPE TRACK] Filtering for class {self.filter_class}...")
             df_all = df_all[df_all['gt'] == self.filter_class]
-
-        # Stratified split for training vs sampling
-        if which_file in ["train", "sample"]:
-            train_list = []
-            test_list = []
-            for label in df_all['gt'].unique():
-                label_df = df_all[df_all['gt'] == label]
-                split_index = int(split_ratio * len(label_df))
-                train_list.append(label_df.iloc[:split_index])
-                test_list.append(label_df.iloc[split_index:])
-                
-            if which_file == "train":
-                df_all = pd.concat(train_list, ignore_index=True)
-                print(f"[SHAPE TRACK] After train split ({split_ratio*100}%): {df_all.shape}")
-            elif which_file == "sample":
-                df_all = pd.concat(test_list, ignore_index=True)
-                print(f"[SHAPE TRACK] After sample split ({(1-split_ratio)*100}%): {df_all.shape}")
 
         # Store labels
         self.labels = df_all['gt'].values
@@ -67,16 +54,11 @@ class EncodedEMGDataset(Dataset):
         label = self.labels[idx]
         
         # For autoregressive training (predicting the next token):
-        # x is the sequence from the start to the second-to-last token
-        # y is the sequence from the second token to the end
         x = seq[:-1]
         y = seq[1:]
         
-        # VQ-VAE tokens are discrete indices, so they MUST be LongTensors
         x = torch.tensor(x, dtype=torch.long)
         y = torch.tensor(y, dtype=torch.long)
-        
-        # Keep the label as a LongTensor to condition the transformer
         label = torch.tensor(label, dtype=torch.long)
         
         return x, y, label
@@ -92,15 +74,13 @@ class EncodedEMGDataset(Dataset):
         return torch.stack(X), torch.stack(Y), torch.stack(L)
 
 if __name__ == "__main__":
-    # Test the new dataset class
-    dataset = EncodedEMGDataset(
-        csv_files=[".\data\encoded_df.csv"],
-        filter_class=None, 
-        which_file="train"
-    )
-    
-    x, y, label = dataset[0]
-    print(f"\nx shape: {x.shape}, y shape: {y.shape}")
-    print(f"Gesture Ground Truth Label: {label}")
-    print(f"Input tokens (x): {x[:10]}...")
-    print(f"Target tokens (y): {y[:10]}...")
+    # Test the dataset class
+    # Path relative to scripts/
+    path = "../VQVAE/models/test_run8_1epoch/train_encoded_df.csv"
+    if os.path.exists(path):
+        dataset = EncodedEMGDataset(csv_files=[path])
+        x, y, label = dataset[0]
+        print(f"\nx shape: {x.shape}, y shape: {y.shape}")
+        print(f"Gesture Label: {label}")
+    else:
+        print(f"Test file not found at {path}")

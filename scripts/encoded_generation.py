@@ -58,8 +58,9 @@ def run_batch_generation():
     print("Model loaded and set to eval mode.")
 
     # 3. Load Data
-    data_file_full_path = config.get('encoded_data_path', "../data/encoded_df.csv")
-    print(f"Loading dataset from: {data_file_full_path}")
+    # Use train_data_path (seen) for generation if available, otherwise fallback to encoded_data_path
+    data_file_full_path = config.get('train_data_path', config.get('encoded_data_path', "../data/encoded_df.csv"))
+    print(f"Loading source dataset for generation from: {data_file_full_path}")
     full_df = pd.read_csv(data_file_full_path)
     
     all_labels = torch.tensor(full_df.iloc[:, 0].values, dtype=torch.long).to(device)
@@ -111,7 +112,7 @@ def run_batch_generation():
         df_out = pd.DataFrame(output_data, columns=cols)
         print(f"Saving generated dataset for ratio {prompt_size}:{gen_size}...")
         
-        file_name = f"synthetic_df_{prompt_size}_{gen_size}.csv"
+        file_name = f"seen_synthetic_df_{prompt_size}_{gen_size}.csv"
         save_path = os.path.join(save_dir, file_name)
         df_out.to_csv(save_path, index=False)
         print(f"SUCCESS: Saved to {save_path}")

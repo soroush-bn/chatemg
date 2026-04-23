@@ -92,29 +92,26 @@ ctx = (
 # -----------------------------------------------------------------------------
 split_seed = 42
 
-# Ensure your config file has a path to the encoded CSV, or hardcode it here
-data_file_full_path = config.get('encoded_data_path', "../data/encoded_df.csv")
-split_ratio = config.get('split', 0.8)
+# 1. Determine paths
+train_data_path = config.get('train_data_path', None)
+val_data_path = config.get('val_data_path', None)
+encoded_data_path = config.get('encoded_data_path', "../data/encoded_df.csv")
 
-# 1. Initialize Stratified Training Dataset
-train_dataset = EncodedEMGDataset(
-    csv_files=[data_file_full_path],
-    filter_class=config.get('filter_class', None),
-    which_file="train",
-    split_ratio=split_ratio
-)
-
-# 2. Initialize Stratified Validation Dataset
-if split_ratio >= 1.0:
-    print("Using 100% of data for validation as well (Full Overlap)")
-    test_dataset = train_dataset
-else:
-    test_dataset = EncodedEMGDataset(
-        csv_files=[data_file_full_path],
-        filter_class=config.get('filter_class', None),
-        which_file="sample", # "sample" triggers the remaining split in your dataset class
-        split_ratio=split_ratio
+if train_data_path and val_data_path:
+    if master_process:
+        print(f"Using separate train and val files:\n  Train: {train_data_path}\n  Val: {val_data_path}")
+    
+    train_dataset = EncodedEMGDataset(
+        csv_files=[train_data_path],
+        filter_class=config.get('filter_class', None)
     )
+    
+    test_dataset = EncodedEMGDataset(
+        csv_files=[val_data_path],
+        filter_class=config.get('filter_class', None)
+    )
+else:
+    raise ValueError("Please provide separate train and val file paths in the config to avoid data leakage.")
 
 batch_size = config.get('batch_size', 64)
 
