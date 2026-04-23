@@ -4,88 +4,103 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, f1_score
 import yaml
 import os
 import pathlib
 import argparse
+from tqdm import tqdm
 
 from VQVAE.model import SDformerVQVAE
+from classifier_model import LatentMLP
 
-class CNNClassifier(nn.Module):
-    def __init__(self, code_dim=32, num_classes=17):
-        super().__init__()
-        # Input shape: [Batch, Time, Channels] -> [Batch, 75, code_dim]
-        # PyTorch Conv1d expects: [Batch, Channels, Time]
-        
-        self.features = nn.Sequential(
-            nn.Conv1d(in_channels=code_dim, out_channels=64, kernel_size=5, padding=2),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2),
-            
-            nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            
-            nn.AdaptiveAvgPool1d(1) 
-        )
-        
-        self.classifier = nn.Sequential(
-            nn.Dropout(0.4),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, num_classes)
-        )
-
-    def forward(self, x):
-        # x: [Batch, Time, Channels] -> [Batch, Channels, Time]
-        x = x.permute(0, 2, 1)
-        x = self.features(x)
-        x = x.squeeze(-1)
-        return self.classifier(x)
-
-def load_and_map_data(csv_path, vqvae, device):
-    """
-    Loads CSV tokens and maps them to their VQ-VAE embedding vectors.
-    Also identifies participant IDs based on gesture resets.
-    """
+# --- 2. Data Loading & Embedding ---
+def load_and_embed_data(csv_path, vqvae, device):
     if not os.path.exists(csv_path):
-        print(f"Warning: File not found {csv_path}")
         return None, None, None, 0
         
     df = pd.read_csv(csv_path)
     gt_raw = df['gt'].values
-    y = torch.tensor(gt_raw, dtype=torch.long)
+    labels = gt_raw - gt_raw.min()
+    y = torch.tensor(labels, dtype=torch.long)
     
     token_cols = [c for c in df.columns if c != 'gt']
     indices = torch.tensor(df[token_cols].values, dtype=torch.long).to(device)
-    num_samples, seq_len = indices.shape
-
-    # Map token indices to VQ-VAE codebook vectors
+    
     with torch.no_grad():
         flat_indices = indices.reshape(-1)
         embeddings = vqvae.quantizer.embedding[flat_indices]
-        X = embeddings.reshape(num_samples, seq_len, -1).cpu()
-    
-    # Identify participant IDs (current_p increments when gesture ID resets)
-    p_ids = np.zeros(num_samples, dtype=int)
+        X = embeddings.reshape(indices.shape[0], indices.shape[1], -1).cpu()
+
+    # Participant boundaries based on GT order
+    p_ids = np.zeros(len(X), dtype=int)
     current_p = 0
-    for i in range(1, num_samples):
-        if gt_raw[i] < gt_raw[i-1]:
-            current_p += 1
+    for i in range(1, len(X)):
+        if gt_raw[i] < gt_raw[i-1]: current_p += 1
         p_ids[i] = current_p
         
     return X, y, p_ids, current_p + 1
 
-def run_experiment(X_train, y_train, X_test, y_test, device, code_dim, num_classes, name, epochs=30):
-    train_loader = DataLoader(TensorDataset(X_train, y_train), batch_size=128, shuffle=True)
-    test_loader = DataLoader(TensorDataset(X_test, y_test), batch_size=128, shuffle=False)
+# --- 3. Training Helper ---
+def train_model(X, y, device, code_dim, epochs=20, verbose=False):
+    model = LatentMLP(input_size=code_dim).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    criterion = nn.CrossEntropyLoss()
     
-    model = CNNClassifier(code_dim=code_dim, num_classes=num_classes).to(device)
-    model = train_model(model, train_loader, device, epochs=epochs)
-    acc, f1 = evaluate_model(model, test_loader, device, name=name)
+    loader = DataLoader(TensorDataset(X, y), batch_size=64, shuffle=True)
+    
+    iterator = range(epochs)
+    if verbose:
+        iterator = tqdm(iterator, desc="Training")
+
+    for _ in iterator:
+        model.train()
+        for batch_X, batch_y in loader:
+            batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+            optimizer.zero_grad()
+            loss = criterion(model(batch_X), batch_y)
+            loss.backward()
+            optimizer.step()
+            
+    return model
+
+# --- 4. Evaluation Helper ---
+def evaluate_model(model, X, y, device):
+    model.eval()
+    with torch.no_grad():
+        outputs = model(X.to(device))
+        _, preds = torch.max(outputs, 1)
+        all_preds = preds.cpu().numpy()
+        all_targets = y.numpy()
+        
+    acc = accuracy_score(all_targets, all_preds)
+    f1 = f1_score(all_targets, all_preds, average='weighted', zero_division=0)
+    
     return acc, f1
+
+def run_classification_workflow(X_train, y_train, p_ids_train, X_test, y_test, p_ids_test, device, code_dim, num_participants):
+    assert num_participants ==11 , "Number of participants must be equal to 11"
+    
+    # Between-subjects (Global)
+
+    model_global = train_model(X_train, y_train, device, code_dim=code_dim, epochs=20)
+    acc_global, f1_global = evaluate_model(model_global, X_test, y_test, device)
+    
+    # Within-subjects (Per-participant)
+    ws_accs, ws_f1s = [], []
+    for p_id in range(num_participants):
+        mask_train = (p_ids_train == p_id)
+        mask_test = (p_ids_test == p_id)
+        
+        if not mask_train.any() or not mask_test.any():
+            continue
+            
+        model_p = train_model(X_train[mask_train], y_train[mask_train], device, code_dim=code_dim, epochs=20)
+        acc_p, f1_p = evaluate_model(model_p, X_test[mask_test], y_test[mask_test], device)
+        ws_accs.append(acc_p)
+        ws_f1s.append(f1_p)
+        
+    return acc_global, f1_global, np.mean(ws_accs) if ws_accs else 0, np.mean(ws_f1s) if ws_f1s else 0
 
 def main():
     parser = argparse.ArgumentParser()
@@ -93,7 +108,6 @@ def main():
     parser.add_argument('--vqvae_config', type=str, required=True, help="Path to VQ-VAE config")
     args = parser.parse_args()
 
-    # 1. Load Configs
     with open(args.config, 'r') as f:
         tr_config = yaml.safe_load(f)
     with open(args.vqvae_config, 'r') as f:
@@ -103,7 +117,6 @@ def main():
     exp_name = tr_config['exp_name']
     vq_name = vq_config['name']
     
-    # 2. Paths
     model_files_base_directory = os.path.join(pathlib.Path(__file__).resolve().parent.__str__(), "models")
     save_dir = os.path.join(model_files_base_directory, exp_name)
     
@@ -111,114 +124,105 @@ def main():
     VAL_PATH = tr_config.get('val_data_path', f"./VQVAE/models/{vq_name}/unseen_encoded_df.csv")
     VQVAE_WEIGHTS = f"./VQVAE/models/{vq_name}/final_model.pth"
 
-    # 3. Load VQ-VAE
-    print(f"\n--- Initializing Classification Comparison Pipeline [{exp_name}] ---")
+    print(f"\n--- Classification Experiments Workflow [{exp_name}] ---")
     vqvae = SDformerVQVAE(vq_config).to(device)
     if os.path.exists(VQVAE_WEIGHTS):
         vqvae.load_state_dict(torch.load(VQVAE_WEIGHTS, map_location=device))
-        print(f"VQ-VAE weights loaded from {VQVAE_WEIGHTS}")
+        print(f"VQ-VAE weights loaded.")
     vqvae.eval()
 
-    # 4. Load & Map Original Datasets
-    print("\n[1/3] Loading Real SEEN and UNSEEN datasets...")
-    X_seen, y_seen, p_ids_seen, num_p_seen = load_and_map_data(TRAIN_PATH, vqvae, device)
-    X_unseen, y_unseen, p_ids_unseen, num_p_unseen = load_and_map_data(VAL_PATH, vqvae, device)
+    print("\nLoading Real SEEN and UNSEEN datasets...")
+    X_seen, y_seen, p_ids_seen, num_p_seen = load_and_embed_data(TRAIN_PATH, vqvae, device)
+    X_unseen, y_unseen, p_ids_unseen, num_p_unseen = load_and_embed_data(VAL_PATH, vqvae, device)
     
     if X_seen is None or X_unseen is None:
-        print("Error: Required real datasets (seen/unseen) not found. Exiting.")
+        print("Error: Required real datasets (seen/unseen) not found.")
         return
 
     num_participants = min(num_p_seen, num_p_unseen)
-    num_classes = tr_config.get('num_classes', 17)
     code_dim = X_seen.shape[-1]
-    ratios = ["70_5", "60_15", "50_25", "25_50", "5_70"]
-
+    ratios = ["70_5", "60_15", "50_25", "25_50"]
+    
     results = []
 
-    # -------------------------------------------------------------------------
-    # SCENARIO 1: GLOBAL (BETWEEN-SUBJECTS)
-    # -------------------------------------------------------------------------
-    print("\n" + "="*60)
-    print(f"{'SCENARIO 1: GLOBAL (BETWEEN-SUBJECTS)':^60}")
-    print("="*60)
+    # --- EXPERIMENT 1: Train on Encoded SEEN, Test on UNSEEN ---
+    print("\n[EXP 1] Training on SEEN, Testing on UNSEEN...")
+    acc_g, f1_g, acc_w, f1_w = run_classification_workflow(
+        X_seen, y_seen, p_ids_seen, 
+        X_unseen, y_unseen, p_ids_unseen, 
+        device, code_dim, num_participants
+    )
+    results.append({
+        "Experiment": "Exp 1: Seen Real",
+        "Ratio": "N/A",
+        "Between-Subj Acc": acc_g,
+        "Between-Subj F1": f1_g,
+        "Within-Subj Acc": acc_w,
+        "Within-Subj F1": f1_w
+    })
 
-    # Global Baseline
-    print("\nRunning Global Baseline (Seen reps 1-3 -> Unseen rep 4)...")
-    acc, f1 = run_experiment(X_seen, y_seen, X_unseen, y_unseen, device, code_dim, num_classes, "Global Baseline")
-    results.append({"Scenario": "Global", "Setup": "Baseline", "Accuracy": acc, "F1": f1})
-
-    # Global Augmented
+    # --- EXPERIMENT 2 & 3 ---
     for r in ratios:
         synth_path = os.path.join(save_dir, f"seen_synthetic_df_{r}.csv")
-        if not os.path.exists(synth_path): continue
-        
-        print(f"\nRunning Global Augmented ({r})...")
-        X_synth, y_synth, _, _ = load_and_map_data(synth_path, vqvae, device)
-        if X_synth is not None:
-            X_comb = torch.cat([X_seen, X_synth], dim=0)
-            y_comb = torch.cat([y_seen, y_synth], dim=0)
-            acc, f1 = run_experiment(X_comb, y_comb, X_unseen, y_unseen, device, code_dim, num_classes, f"Global Aug ({r})")
-            results.append({"Scenario": "Global", "Setup": f"Augmented ({r})", "Accuracy": acc, "F1": f1})
-
-    # -------------------------------------------------------------------------
-    # SCENARIO 2: WITHIN-SUBJECT (PER-PARTICIPANT)
-    # -------------------------------------------------------------------------
-    print("\n" + "="*60)
-    print(f"{'SCENARIO 2: WITHIN-SUBJECT (PER-PARTICIPANT)':^60}")
-    print("="*60)
-
-    # Within-Subject Baseline
-    print("\nRunning Within-Subject Baseline (Averaged)...")
-    ws_b_accs, ws_b_f1s = [], []
-    for p_id in range(num_participants):
-        mask_s = (p_ids_seen == p_id)
-        mask_u = (p_ids_unseen == p_id)
-        if not mask_s.any() or not mask_u.any(): continue
-        
-        acc, f1 = run_experiment(X_seen[mask_s], y_seen[mask_s], X_unseen[mask_u], y_unseen[mask_u], 
-                                 device, code_dim, num_classes, f"WS Baseline P{p_id}", epochs=20)
-        ws_b_accs.append(acc); ws_b_f1s.append(f1)
-    
-    results.append({"Scenario": "Within-Subject", "Setup": "Baseline", "Accuracy": np.mean(ws_b_accs), "F1": np.mean(ws_b_f1s)})
-
-    # Within-Subject Augmented
-    for r in ratios:
-        synth_path = os.path.join(save_dir, f"seen_synthetic_df_{r}.csv")
-        if not os.path.exists(synth_path): continue
-        
-        X_synth, y_synth, p_ids_synth, _ = load_and_map_data(synth_path, vqvae, device)
-        if X_synth is None: continue
-        
-        print(f"\nRunning Within-Subject Augmented ({r})...")
-        ws_a_accs, ws_a_f1s = [], []
-        for p_id in range(num_participants):
-            mask_s = (p_ids_seen == p_id)
-            mask_u = (p_ids_unseen == p_id)
-            mask_syn = (p_ids_synth == p_id)
-            if not mask_s.any() or not mask_u.any() or not mask_syn.any(): continue
+        if not os.path.exists(synth_path):
+            print(f"Skipping ratio {r}: synthetic data not found at {synth_path}")
+            continue
             
-            X_comb = torch.cat([X_seen[mask_s], X_synth[mask_syn]], dim=0)
-            y_comb = torch.cat([y_seen[mask_s], y_synth[mask_syn]], dim=0)
-            
-            acc, f1 = run_experiment(X_comb, y_comb, X_unseen[mask_u], y_unseen[mask_u], 
-                                     device, code_dim, num_classes, f"WS Aug ({r}) P{p_id}", epochs=20)
-            ws_a_accs.append(acc); ws_a_f1s.append(f1)
+        print(f"\nProcessing Ratio: {r}")
+        X_synth, y_synth, p_ids_synth, _ = load_and_embed_data(synth_path, vqvae, device)
         
-        results.append({"Scenario": "Within-Subject", "Setup": f"Augmented ({r})", "Accuracy": np.mean(ws_a_accs), "F1": np.mean(ws_a_f1s)})
+        # EXPERIMENT 2: Train on Synthetic, Test on UNSEEN
+        print(f" [EXP 2] Training on Synthetic ({r}), Testing on UNSEEN...")
+        acc_g, f1_g, acc_w, f1_w = run_classification_workflow(
+            X_synth, y_synth, p_ids_synth, 
+            X_unseen, y_unseen, p_ids_unseen, 
+            device, code_dim, num_participants
+        )
+        results.append({
+            "Experiment": "Exp 2: Synthetic Only",
+            "Ratio": r,
+            "Between-Subj Acc": acc_g,
+            "Between-Subj F1": f1_g,
+            "Within-Subj Acc": acc_w,
+            "Within-Subj F1": f1_w
+        })
 
-    # 7. Print Final Comparison Table
-    print("\n" + "="*75)
-    print(f"{'FINAL CLASSIFICATION COMPARISON SUMMARY':^75}")
-    print("="*75)
-    print(f"{'Scenario':<18} | {'Setup':<22} | {'Accuracy':<12} | {'F1-Score':<12}")
-    print("-" * 75)
+        # EXPERIMENT 3: Train on Augmented (Seen + Synthetic), Test on UNSEEN
+        print(f" [EXP 3] Training on Augmented ({r}), Testing on UNSEEN...")
+        X_aug = torch.cat([X_seen, X_synth], dim=0)
+        y_aug = torch.cat([y_seen, y_synth], dim=0)
+        p_ids_aug = np.concatenate([p_ids_seen, p_ids_synth], axis=0)
+        
+        acc_g, f1_g, acc_w, f1_w = run_classification_workflow(
+            X_aug, y_aug, p_ids_aug, 
+            X_unseen, y_unseen, p_ids_unseen, 
+            device, code_dim, num_participants
+        )
+        results.append({
+            "Experiment": "Exp 3: Augmented",
+            "Ratio": r,
+            "Between-Subj Acc": acc_g,
+            "Between-Subj F1": f1_g,
+            "Within-Subj Acc": acc_w,
+            "Within-Subj F1": f1_w
+        })
+
+    # --- Print Summary ---
+    print("\n" + "="*100)
+    print(f"{'CLASSIFICATION EXPERIMENTS SUMMARY':^100}")
+    print("="*100)
+    header = f"{'Experiment':<25} | {'Ratio':<10} | {'Between-Subj Acc':<18} | {'Within-Subj Acc':<18}"
+    print(header)
+    print("-" * 100)
     for res in results:
-        print(f"{res['Scenario']:<18} | {res['Setup']:<22} | {res['Accuracy']*100:>10.2f}% | {res['F1']*100:>10.2f}%")
-    print("="*75)
+        line = f"{res['Experiment']:<25} | {res['Ratio']:<10} | {res['Between-Subj Acc']*100:>16.2f}% | {res['Within-Subj Acc']*100:>16.2f}%"
+        print(line)
+    print("="*100)
 
     res_df = pd.DataFrame(results)
-    res_df.to_csv(os.path.join(save_dir, "augmentation_comparison_results.csv"), index=False)
-    print(f"Full results saved to: {os.path.join(save_dir, 'augmentation_comparison_results.csv')}")
+    save_path = os.path.join(save_dir, "classification_experiments_results.csv")
+    res_df.to_csv(save_path, index=False)
+    print(f"\nResults saved to: {save_path}")
 
 if __name__ == "__main__":
     main()

@@ -71,7 +71,7 @@ def run_batch_generation():
     print(f"Total samples to process: {num_samples}")
 
     # 4. Ratios
-    ratios = [(70, 5), (60, 15), (50, 25), (25, 50), (5, 70)]
+    ratios = [(70, 5), (60, 15), (50, 25), (25, 50)]
 
     # 5. Generation Loop
     for prompt_size, gen_size in ratios:
