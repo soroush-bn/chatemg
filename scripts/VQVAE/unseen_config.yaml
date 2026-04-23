@@ -1,0 +1,25 @@
+name: "unseen"
+number_of_epochs: 200
+input_dim: 8         
+hidden_dim: 512    
+codebook_size: 512
+code_dim: 128
+window_size: 300    
+stride : 30  
+lambda_loss: 0.1    
+batch_size: 64
+learning_rate: 1e-4
+decay: 0.99           
+
+wandb_log: True
+wandb_project: "vqvae_tuned2"
+
+participants_list_ids : ["033106b27b","bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d","ecfa481b42","e49db6578f","27f6898a3f","3f858df9cf","9780ed81f4"] #"bc4dd952fe","31afab1e30","97c6aaac2d","7037a93026","98aa5fac2d"]
+sensor_type : "emg"
+axis : "x"
+location : "forearm" 
+
+raw_data_path : "/home/sbaghernezha/data/"
+df_raw_name : "final_df.csv"
+converted_data_path: "/home/sbaghernezha/projects/chatemg/chatemg/data_for_vqvae/"
+
