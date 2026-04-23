@@ -6,7 +6,11 @@ import yaml
 import os 
 from sklearn.preprocessing import StandardScaler
 from scipy.signal import butter, filtfilt, iirnotch
-
+label_mapping = {
+    "Thumb Extension":0,"index Extension":1,"Middle Extension":2,"Ring Extension":3,
+    "Pinky Extension":4,"Thumbs Up":5,"Right Angle":6,"Peace":7,"OK":8,"Horn":9,"Hang Loose":10,
+    "Power Grip":11,"Hand Open":12,"Wrist Extension":13,"Wrist Flexion":14,"Ulnar deviation":15,"Radial Deviation":16    
+}
 class EMGDataset(Dataset):
     def __init__(self, config, window_size=300, stride=1, fs=2000, split='all'):
         if stride < 1:
