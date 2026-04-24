@@ -42,12 +42,19 @@ def load_and_embed_data(csv_path, vqvae, device):
     return X, y, p_ids, current_p + 1
 
 # --- 3. Training Helper ---
-def train_model(X, y, device, code_dim, epochs=20, verbose=False):
+def train_model(X, y, device, code_dim, epochs=50, verbose=False):
     model = LatentMLP(input_size=code_dim).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.01)
     criterion = nn.CrossEntropyLoss()
     
-    loader = DataLoader(TensorDataset(X, y), batch_size=64, shuffle=True)
+    loader = DataLoader(TensorDataset(X, y), batch_size=128, shuffle=True)
+    
+    # Add a scheduler for better convergence
+    scheduler = optim.lr_scheduler.OneCycleLR(
+        optimizer, max_lr=0.003, 
+        steps_per_epoch=len(loader), 
+        epochs=epochs
+    )
     
     iterator = range(epochs)
     if verbose:
@@ -61,6 +68,7 @@ def train_model(X, y, device, code_dim, epochs=20, verbose=False):
             loss = criterion(model(batch_X), batch_y)
             loss.backward()
             optimizer.step()
+            scheduler.step()
             
     return model
 
@@ -79,11 +87,10 @@ def evaluate_model(model, X, y, device):
     return acc, f1
 
 def run_classification_workflow(X_train, y_train, p_ids_train, X_test, y_test, p_ids_test, device, code_dim, num_participants):
-    assert num_participants ==11 , "Number of participants must be equal to 11"
+    assert num_participants == 11, "Number of participants must be equal to 11"
     
     # Between-subjects (Global)
-
-    model_global = train_model(X_train, y_train, device, code_dim=code_dim, epochs=20)
+    model_global = train_model(X_train, y_train, device, code_dim=code_dim)
     acc_global, f1_global = evaluate_model(model_global, X_test, y_test, device)
     
     # Within-subjects (Per-participant)
@@ -95,7 +102,7 @@ def run_classification_workflow(X_train, y_train, p_ids_train, X_test, y_test, p
         if not mask_train.any() or not mask_test.any():
             continue
             
-        model_p = train_model(X_train[mask_train], y_train[mask_train], device, code_dim=code_dim, epochs=20)
+        model_p = train_model(X_train[mask_train], y_train[mask_train], device, code_dim=code_dim)
         acc_p, f1_p = evaluate_model(model_p, X_test[mask_test], y_test[mask_test], device)
         ws_accs.append(acc_p)
         ws_f1s.append(f1_p)
