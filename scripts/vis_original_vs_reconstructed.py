@@ -1,3 +1,4 @@
+import pathlib
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -91,10 +92,8 @@ if __name__ == "__main__":
 
     exp_name = tr_config['exp_name']
     vq_name = vq_config['name']
-
     model_files_base_directory = os.path.join(pathlib.Path(__file__).resolve().parent.__str__(), "models")
     base_model_dir = os.path.join(model_files_base_directory, exp_name)
-    
     # Use UNSEEN data paths
     ORIG_PATH = f"./VQVAE/models/{vq_name}/unseen_data_preprocessed.csv"
     RECON_PATH = f"{base_model_dir}/unseen_reconstructed_final.csv"
