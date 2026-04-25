@@ -10,6 +10,11 @@ fi
 module purge
 module load miniconda/pytorch-tensorflow-gpu
 
+# --- SINGLE SOURCE OF TRUTH ---
+export VQ_CONFIG="/gpfs/home/sbaghernezha/projects/chatemg/chatemg/scripts/VQVAE/unseen_config.yaml"
+export CONFIG="/gpfs/home/sbaghernezha/projects/chatemg/chatemg/scripts/configs/replicate_unseen.yaml"
+# ------------------------------
+
 # --- 1. SETUP DIRECTORIES ---
 # Extract exp_name from config using python
 EXP_NAME=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['exp_name'])")
