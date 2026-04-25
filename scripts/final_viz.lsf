@@ -1,0 +1,83 @@
+#!/bin/bash
+# final_viz.lsf - Automate all visualizations for ChatEMG
+
+set -euo pipefail
+
+# Load environment
+if [ -f /etc/profile.d/modules.sh ]; then
+    source /etc/profile.d/modules.sh
+fi
+module purge
+module load miniconda/pytorch-tensorflow-gpu
+
+# --- 1. SETUP DIRECTORIES ---
+# Extract exp_name from config using python
+EXP_NAME=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['exp_name'])")
+BASE_DIR="./models/$EXP_NAME"
+VIZ_DIR="$BASE_DIR/final_visualization"
+
+echo "Creating visualization directory: $VIZ_DIR"
+mkdir -p "$VIZ_DIR"
+
+# --- 2. FIND BEST CHECKPOINT ---
+# Find the checkpoint with the highest iteration number
+CKPT_FOLDER=$(ls -d $BASE_DIR/iter_*/ | sort -V | tail -n 1)
+CKPT_PATH="${CKPT_FOLDER}ckpt.pt"
+echo "Using checkpoint: $CKPT_PATH"
+
+# --- 3. RUN VISUALIZATIONS ---
+
+echo "--- Stage A: Synthetic Signal Grid ---"
+# This script decodes synthetic tokens and plots a 3x3 grid
+python encoded_visualizer.py \
+    --config "$CONFIG" \
+    --vqvae_config "$VQ_CONFIG" \
+    --vqvae_ckpt "./VQVAE/models/$(python -c "import yaml; print(yaml.safe_load(open('$VQ_CONFIG'))['name'])")/final_model.pth"
+
+# Move the resulting grid to our final folder
+mv "$BASE_DIR/synthetic_signals_grid.png" "$VIZ_DIR/"
+
+echo "--- Stage B: Real vs Reconstructed (Unseen) ---"
+# First ensure the reconstruction CSV exists
+python reconstruct_encoded_df.py --config "$CONFIG" --vqvae_config "$VQ_CONFIG"
+
+# Then run the comparison visualizer
+python vis_original_vs_reconstructed.py \
+    --config "$CONFIG" \
+    --vqvae_config "$VQ_CONFIG" \
+    --save_dir "$VIZ_DIR/reconstruction_plots"
+
+echo "--- Stage C: Attention Heatmaps ---"
+# Visualize Attention for Layer 0 and Layer 5 (or the last layer)
+LAST_LAYER=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['n_layer'] - 1)")
+
+for LAYER in 0 $LAST_LAYER; do
+    echo "Visualizing Attention for Layer $LAYER..."
+    python visualize_attention.py \
+        --config "$CONFIG" \
+        --ckpt "$CKPT_PATH" \
+        --layer $LAYER \
+        --sample 0 \
+        --save_dir "$VIZ_DIR/attention"
+done
+
+echo "--- Stage D: Ratio Comparison (Seen Data) ---"
+# Compare one gesture across all generation ratios
+python visualize_ratios.py \
+    --config "$CONFIG" \
+    --vqvae_config "$VQ_CONFIG" \
+    --participant 0 \
+    --gesture 1
+
+mv "$BASE_DIR/ratio_comparison_p0_g1.png" "$VIZ_DIR/"
+
+echo "--- Stage E: Classification Results ---"
+# Copy the final results CSV if it exists
+if [ -f "$BASE_DIR/classification_experiments_results.csv" ]; then
+    cp "$BASE_DIR/classification_experiments_results.csv" "$VIZ_DIR/"
+fi
+
+echo "=========================================================="
+echo "All visualizations completed!"
+echo "Check: $VIZ_DIR"
+echo "=========================================================="
