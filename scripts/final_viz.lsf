@@ -32,25 +32,23 @@ echo "Using checkpoint: $CKPT_PATH"
 
 # --- 3. RUN VISUALIZATIONS ---
 
-echo "--- Stage A: Synthetic Signal Grid ---"
-# This script decodes synthetic tokens and plots a 3x3 grid
+echo "--- Stage A: Synthetic Signal Grid (Quick View) ---"
 python encoded_visualizer.py \
     --config "$CONFIG" \
     --vqvae_config "$VQ_CONFIG" \
     --vqvae_ckpt "./VQVAE/models/$(python -c "import yaml; print(yaml.safe_load(open('$VQ_CONFIG'))['name'])")/final_model.pth"
 
-# Move the resulting grid to our final folder
 mv "$BASE_DIR/synthetic_signals_grid.png" "$VIZ_DIR/"
 
-echo "--- Stage B: Real vs Reconstructed (Unseen) ---"
-# First ensure the reconstruction CSV exists
-python reconstruct_encoded_df.py --config "$CONFIG" --vqvae_config "$VQ_CONFIG"
-
-# Then run the comparison visualizer
-python vis_original_vs_reconstructed.py \
+echo "--- Stage B: Real vs Synthetic Comparison (All Gestures & Ratios) ---"
+# This is the primary visualization: Real Reconstruction vs Synthetic Reconstruction
+python compare_real_vs_synthetic.py \
     --config "$CONFIG" \
     --vqvae_config "$VQ_CONFIG" \
-    --save_dir "$VIZ_DIR/reconstruction_plots"
+    --participant 0
+
+# Copy the entire directory of comparison plots
+cp -r "$BASE_DIR/reconstruction_comparisons" "$VIZ_DIR/"
 
 echo "--- Stage C: Attention Heatmaps ---"
 # Visualize Attention for Layer 0 and Layer 5 (or the last layer)
@@ -66,15 +64,7 @@ for LAYER in 0 $LAST_LAYER; do
         --save_dir "$VIZ_DIR/attention"
 done
 
-echo "--- Stage D: Ratio Comparison (Seen Data) ---"
-# Compare one gesture across all generation ratios
-python visualize_ratios.py \
-    --config "$CONFIG" \
-    --vqvae_config "$VQ_CONFIG" \
-    --participant 0 \
-    --gesture 1
-
-mv "$BASE_DIR/ratio_comparison_p0_g1.png" "$VIZ_DIR/"
+# Stage D was removed as it is now integrated into Stage B (compare_real_vs_synthetic.py)
 
 echo "--- Stage E: Classification Results ---"
 # Copy the final results CSV if it exists
