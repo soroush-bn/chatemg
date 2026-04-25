@@ -9,10 +9,14 @@ from encoded_dataset import EncodedEMGDataset
 import argparse
 import pathlib
 
-def visualize_attention(config_path, model_path, layer_to_viz=0, sample_idx=0):
+def visualize_attention(config_path, model_path, layer_to_viz=0, sample_idx=0, save_dir="./attention_plots"):
     # 1. Load Configs
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
+    
+    # Create directory if it doesn't exist
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
