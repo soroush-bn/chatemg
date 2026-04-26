@@ -40,11 +40,8 @@ def main():
         os.makedirs(viz.save_dir, exist_ok=True)
 
     # 5. Run VQ-VAE specific plots
-    print("Generating Codebook t-SNE...")
+    print("Generating Codebook t-SNE and Atomic Patterns...")
     viz.visualize_codebook()
-    
-    print("Generating Atomic Patterns...")
-    viz.visualize_atomic_patterns(num_patterns=10)
 
     print(f"VQ-VAE visualizations completed. Results in: {viz.save_dir}")
 
