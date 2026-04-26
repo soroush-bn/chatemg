@@ -50,7 +50,12 @@ python compare_real_vs_synthetic.py \
 # Copy the entire directory of comparison plots
 cp -r "$BASE_DIR/reconstruction_comparisons" "$VIZ_DIR/"
 
-echo "--- Stage C: Attention Heatmaps ---"
+echo "--- Stage C: VQ-VAE Latent Space (t-SNE & Atoms) ---"
+python run_vqvae_viz.py \
+    --vqvae_config "$VQ_CONFIG" \
+    --save_dir "$VIZ_DIR/vqvae_latent_space"
+
+echo "--- Stage D: Attention Heatmaps ---"
 # Visualize Attention for Layer 0 and Layer 5 (or the last layer)
 LAST_LAYER=$(python -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['n_layer'] - 1)")
 
@@ -58,6 +63,7 @@ for LAYER in 0 $LAST_LAYER; do
     echo "Visualizing Attention for Layer $LAYER..."
     python visualize_attention.py \
         --config "$CONFIG" \
+        --vqvae_config "$VQ_CONFIG" \
         --ckpt "$CKPT_PATH" \
         --layer $LAYER \
         --sample 0 \

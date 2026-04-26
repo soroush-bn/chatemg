@@ -9,10 +9,12 @@ from encoded_dataset import EncodedEMGDataset
 import argparse
 import pathlib
 
-def visualize_attention(config_path, model_path, layer_to_viz=0, sample_idx=0, save_dir="./attention_plots"):
+def visualize_attention(config_path, vqvae_config_path, model_path, layer_to_viz=0, sample_idx=0, save_dir="./attention_plots"):
     # 1. Load Configs
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
+    with open(vqvae_config_path, "r") as f:
+        vq_conf = yaml.safe_load(f)
     
     # Create directory if it doesn't exist
     if not os.path.exists(save_dir):
@@ -80,6 +82,26 @@ def visualize_attention(config_path, model_path, layer_to_viz=0, sample_idx=0, s
     with torch.no_grad():
         _ = model(X, labels=label)
 
+    # 5b. Reconstruct the Input Signal for context
+    from decoder import VQVAESignalDecoder
+    vq_name = vq_conf['name']
+    vq_ckpt = f"VQVAE/models/{vq_name}/final_model.pth"
+    
+    try:
+        decoder = VQVAESignalDecoder(vqvae_model_path=vq_ckpt, vqvae_config=vq_conf)
+        recon_input = decoder.decode_window(X)[0] # (Time, Channels)
+        
+        fig_inp, ax_inp = plt.subplots(figsize=(10, 4))
+        for c in range(recon_input.shape[1]):
+            ax_inp.plot(recon_input[:, c], alpha=0.7)
+        ax_inp.set_title(f"Reconstructed Input Signal (Sample {sample_idx} | Label {label.item()})")
+        ax_inp.grid(alpha=0.3)
+        plt.savefig(os.path.join(save_dir, f"input_signal_sample_{sample_idx}.png"))
+        plt.close(fig_inp)
+        print(f"Saved reconstructed input signal to {save_dir}")
+    except Exception as e:
+        print(f"Could not reconstruct input signal: {e}")
+
     # 6. Plotting
     # attention_weights[0] shape: (1, n_head, T, T)
     weights = attention_weights[0][0]
@@ -113,10 +135,11 @@ def visualize_attention(config_path, model_path, layer_to_viz=0, sample_idx=0, s
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True)
+    parser.add_argument('--vqvae_config', type=str, required=True)
     parser.add_argument('--ckpt', type=str, required=True)
     parser.add_argument('--layer', type=int, default=0, help="Which transformer layer to visualize")
     parser.add_argument('--sample', type=int, default=0, help="Which sample index from validation set")
     parser.add_argument('--save_dir', type=str, default=".", help="Where to save the plot")
     args = parser.parse_args()
     
-    visualize_attention(args.config, args.ckpt, args.layer, args.sample, args.save_dir)
+    visualize_attention(args.config, args.vqvae_config, args.ckpt, args.layer, args.sample, args.save_dir)
